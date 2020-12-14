@@ -3,6 +3,8 @@
 #include <sstream>
 #include <json.hpp>
 #include <time.h>
+#include <vector>
+#include <map>
 
 // For convenience
 using json = nlohmann::json;
@@ -84,12 +86,13 @@ int main() {
 
 #if defined (APIKEYID) &&  defined (APISECRETKEY)
 
+
     std::cout << "API-KEY-ID: " << STRINGIZE_VAL(APIKEYID) << std::endl;
     std::cout << "API-SECRET-KEY: " << STRINGIZE_VAL(APISECRETKEY) << std::endl;
 
 	std::string response;
 
-
+	
 	// Number of days in each month: Unadjusted for leap-year.
 	uint64_t months[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
@@ -99,9 +102,9 @@ int main() {
 	// So make Dec. 29 2017 the previous date.
 	uint64_t prev_month = 11; // December
 
-	uint64_t prev_day = 29; // Day 29
+	uint64_t prev_day = 31; // Day 29
 
-	uint64_t prev_year = 2017; // Year 2017
+	uint64_t prev_year = 2019; // Year 2017
 
 	// For all stocks, number of 10%-15% spikes that occurred and climbed another 15%, or more, after that. 
 	uint64_t numerator = 0;
@@ -109,6 +112,8 @@ int main() {
 	// For all stocks, number of 10%-15% spikes that occurred.
 	uint64_t denominator = 0;
 
+
+	uint64_t errors = 0;
 
 	// Years range from [2018, 2021)
 	for(uint64_t year = 2020; year < 2021; ++year) {
@@ -121,11 +126,8 @@ int main() {
 		// Months range from [0,11]
 		for(uint64_t  month = 0; month < 12; ++month) {
 
-	
 
 std::cout << "====================================================================== START OF NEW MONTH ======================================================================" << std::endl << std::endl;
-
-
 
 
 			// Days range from [1,30], [1,31], [1,28], or [1,29] depending on month and if leap-year or not.
@@ -133,167 +135,158 @@ std::cout << "==================================================================
 
 				std::string response;
 
-				// Request the Previous day closing price
-				std::string request =	 "https://api.polygon.io/v1/open-close/AAPL/"
+				std::map<std::string, float> prev_day_closing_price_map;
+
+				// Request the Previous day's closing price for all stocks
+				std::string request =	 "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/"
 								
 									+ 	 std::to_string(prev_year) + "-" + ( ((prev_month+1)<10) ? ("0"+std::to_string(prev_month+1)) : std::to_string(prev_month+1) ) + "-" 
 							
-									+ 	( (prev_day<10) ? ("0"+std::to_string(prev_day)) : std::to_string(prev_day) ) + "?apiKey=" STRINGIZE_VAL(APIKEYID);
+									+ 	( (prev_day<10) ? ("0"+std::to_string(prev_day)) : std::to_string(prev_day) )
 
-std::cout << "Making request for previous day closing price: \n" << request << std::endl;
+									+ "?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
+
+// std::cout << "Making request for previous day closing price for all stocks: \n" << request << std::endl;
 
 				fulfill_request(request, response);
 
 				auto market_data_json = json::parse(response);
 
-				// Today's date or future date: Cannot get day's closing price.
-				if(market_data_json["status"] == "ERROR") break;
+				// Either today's date, future date, or market was closed: Cannot get day's closing price.
+				if(market_data_json["resultsCount"] == 0) continue;
 
-				// Previous day closing price
-				float prev_day_closing_price = market_data_json["close"];
+// std::cout << "Inserting stocks and closing prices into map" << std::endl;
+
+				// Insert all stocks' previous day closing prices into the map
+				for(uint64_t ticker_indx = 0, ticker_count = market_data_json["resultsCount"]; ticker_indx < ticker_count; ++ticker_indx) {
+					
+
+					std::string symb = market_data_json["results"][ticker_indx]["T"];
+
+					// If ticker has weird symbols, then don't insert
+					if(symb.size() > 10) continue;
+
+					prev_day_closing_price_map.emplace(symb, market_data_json["results"][ticker_indx]["c"]);
+				}
 
 
-std::cout << "For the previous date of: " << prev_month+1 << "-" << prev_day << "-" << prev_year << ", \nthe closing price was: " << prev_day_closing_price << std::endl;
+				// Request the current day's opening price for all stocks
+				request =	"https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/"
+								
+						+ 	 std::to_string(year) + "-" + ( ((month+1)<10) ? ("0"+std::to_string(month+1)) : std::to_string(month+1) ) + "-" 
+							
+						+ 	( (day<10) ? ("0"+std::to_string(day)) : std::to_string(day) )
 
-				// Test if market was open on this day (ie. closed because of national emergency or holiday ... etc.)
-				request = 	"https://api.polygon.io/v2/aggs/ticker/AAPL/range/1/minute/" 
+						+ "?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
 
-						+  	std::to_string(get_time_in_ms(month, day, year, 8, 30, 0)) + "/" + std::to_string(get_time_in_ms(month, day, year, 11, 30, 0)) 
-
-						+ 	"?sort=asc&limit=50000&apiKey=" STRINGIZE_VAL(APIKEYID); 
-
-std::cout << "Testing if market was open on: " << month+1 << "-" << day << "-" << year << std::endl;
+// std::cout << "Requesting opening prices for all stocks on: " << month+1 << "-" << day << "-" << year << std::endl;
 
 				fulfill_request(request, response);
 
+				
 				market_data_json = json::parse(response);
-std::cout << "Market was open? " << ((market_data_json["resultsCount"]==0) ? "False" : "True") << std::endl;
+
+// std::cout << "Market was open? " << ((market_data_json["resultsCount"]==0) ? "False" : "True") << std::endl;
+
+
 				// Market was closed on this day, so continue to next day.
-				// Or this day was a short day. We don't trade on short days.
-				if(market_data_json["resultsCount"] < 180) continue;
+				if(market_data_json["resultsCount"] == 0) continue;
 
 
-				// Opening prices of each minute of the stock from 8:30 AM (CST) - 11:30 AM (CST) on given day
-				float open_prices[180] = {};
 
-				// Responses containing minute charts. Entire array contains minute charts from 8:30 AM (CST) - 11:30 AM (CST) of given day
-				std::string responses[6] = {};	
+				// Check the percent change of all stocks from their previous closing price
+				for(uint64_t ticker_indx = 0, ticker_count = market_data_json["resultsCount"]; ticker_indx < ticker_count; ++ticker_indx) {
 
-				// Trading hours we are interested in.
-				uint64_t hours[4] = {8, 9, 10, 11};	
+					std::map<std::string, float>::iterator it = prev_day_closing_price_map.find(market_data_json["results"][ticker_indx]["T"]);
 
+					// Ticker does not have a previous day closing price; It must be a new ticker.
+					if(it == prev_day_closing_price_map.end()) continue;
 
-				// Populate responses array with the minute charts from 8:30 AM (CST) - 11:30 AM (CST).
-				for(uint64_t i = 0; i < 3; ++i) {
-						
-std::cout << "For the date: " << month+1 << "-" << day << "-" << year << ", \n getting minute data between " << hours[i] << ":30:00 and " << hours[i+1] << ":00:00" << std::endl;
+					// The previous day closing price of the stock
+					float previous_day_closing_price = it->second;
+// std::cout << market_data_json["results"][ticker_indx]["o"] << " closed at " << previous_day_closing_price << " the previous day." << std::endl;std::cout << market_data_json["results"][ticker_indx]["T"] << " closed at " << previous_day_closing_price << " the previous day." << std::endl;
 
-					request = 	"https://api.polygon.io/v2/aggs/ticker/AAPL/range/1/minute/" 
-
-										+  	std::to_string(get_time_in_ms(month, day, year, hours[i], 30, 0)) + "/" + std::to_string(get_time_in_ms(month, day, year, hours[i+1], 00, 0)) 
-					
-										+ 	"?unadjusted=true&sort=asc&limit=50000&apiKey=" STRINGIZE_VAL(APIKEYID); 
-
-					fulfill_request(request, responses[i<<1]);
-std::cout << "Putting that data at index: " << (i<<1) << " of the responses array" << std::endl; 
-
-std::cout << "For the date: " << month+1 << "-" << day << "-" << year << ", \n getting minute data between " << hours[i+1] << ":00:00 and " << hours[i+1] << ":30:00" << std::endl;
-
-					request = 	"https://api.polygon.io/v2/aggs/ticker/AAPL/range/1/minute/" 
-
-										+  	std::to_string(get_time_in_ms(month, day, year, hours[i+1], 00, 0)) + "/" + std::to_string(get_time_in_ms(month, day, year, hours[i+1], 30, 0)) 
-					
-										+ 	"?unadjusted=true&sort=asc&limit=50000&apiKey=" STRINGIZE_VAL(APIKEYID); 
-
-					fulfill_request(request, responses[(i<<1)+1]);
-
-std::cout << "Putting that data at index: " << ((i<<1)+1) << " of the responses array" << std::endl; 
-
-				}
-
-std::cout << "Populating the opening prices array" << std::endl;
-				// Populate open_prices array with opening prices of stock for each minute between 8:30 AM (CST) - 11:30 AM (CST)
-				for(uint64_t i = 0; i < 30; ++i) {
-					
-					market_data_json = json::parse(responses[0]);
-
-					open_prices[i] = market_data_json["results"][i]["o"];
-
-					market_data_json = json::parse(responses[1]);
-
-					open_prices[i+30] = market_data_json["results"][i]["o"];
-
-					market_data_json = json::parse(responses[2]);
-
-					open_prices[i+60] = market_data_json["results"][i]["o"];
-
-					market_data_json = json::parse(responses[3]);
-
-					open_prices[i+90] = market_data_json["results"][i]["o"];										
-
-					market_data_json = json::parse(responses[4]);
-
-					open_prices[i+120] = market_data_json["results"][i]["o"];
-
-					market_data_json = json::parse(responses[5]);
-
-					open_prices[i+150] = market_data_json["results"][i]["o"];
-				}																											
+					// If the stock did spike, this is the price of it.
+					float price_of_spike;
 
 
-				// The stock movement meets all the conditions to qualify as one that spike 15% or more after already climbing 10%-15%.
-				bool qualifies = false;
-				// If the stock did spike, this is the price of it.
-				float price_of_spike;
-
-				// Percentage change of current open price and previous day's closing price.
-				float percent_diff;
-std::cout << "Looking for a spike" << std::endl;
-				// For each minute between 8:30 AM (CST) - 11:30 AM (CST), look for a spike between 10%-15%
-				for(uint64_t i = 0; i < 180; ++i) {
-
-std::cout << "For time-stamp: " << (static_cast<unsigned>(i+1)/60)+8 << ":" <<   (i%60) << ":00" << "\n" << " the opening price is: " << open_prices[i] << std::endl;
 					// Compute percentage change between current open price and previous day's closing price.
-					percent_diff = ((open_prices[i] - prev_day_closing_price)/prev_day_closing_price)*100;
+					float percent_diff = ((static_cast<float>(market_data_json["results"][ticker_indx]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
 
-std::cout << "The percent change from previous closing day is: " << percent_diff << "%" << std::endl;
+
 					// Stock spiked between 10%-15%
-					if( (percent_diff >= 10) & (percent_diff <= 15) ) {
+					if(percent_diff >= 15) {
 
-						price_of_spike = open_prices[i];
 
-std::cout << "We found a spike at price: " << price_of_spike << std::endl;
+// std::cout << "The stock with ticker " << market_data_json["results"][ticker_indx]["T"] << " spiked 10%-15% on " << month+1 << "-" << day << "-" << year << std::endl;
+// std::cout << "It spiked to a price of " << market_data_json["results"][ticker_indx]["o"] << std::endl;
+// std::cout << "For the date: " << month+1 << "-" << day << "-" << year << ", \n getting minute data between 8:30:00 AM and 11:30:00" << std::endl;
 
+						request = 	"https://api.polygon.io/v2/aggs/ticker/" + static_cast<std::string>(market_data_json["results"][ticker_indx]["T"]) + "/range/1/minute/" 
+
+								+  	std::to_string(get_time_in_ms(month, day, year, 8, 30, 0)) + "/" + std::to_string(get_time_in_ms(month, day, year, 12, 30, 0)) 
+						
+								+ 	"?unadjusted=false&sort=asc&limit=50000&apiKey=" STRINGIZE_VAL(APIKEYID); 
+
+						fulfill_request(request, response);
+
+						decltype(json::parse(response)) stock_spiked_json;
+
+						try {
+							stock_spiked_json = json::parse(response);
+						}
+						catch(nlohmann::detail::parse_error err) {
+
+							std::cerr << "Part of response lost in transmission" << std::endl;
+
+							++errors;
+
+							continue;
+
+
+						}
+// std::cout << "Market day was short? " << ((stock_spiked_json["resultsCount"] >= 180) ? "False" : "True") << std::endl;
+
+						// This day was a short day. We don't trade on short days.
+						if(stock_spiked_json["resultsCount"] < 240) continue;
+
+
+						price_of_spike = market_data_json["results"][ticker_indx]["o"];
+
+
+						// Increment total number of stocks that spiked between 10%-15%
 						++denominator;
 
-						++i; // Go to open price immediately after spike.
-std::cout << "Looking for further spike" << std::endl;
-						// If spike was found, search further (after spike) and ensure stock price did not fall below previous day's closing price, and
-						// search for further spike of 15% or more.
-						for(; i < 180; ++i) {
 
-						
+// std::cout << "Looking for further spike" << std::endl;
+
+						// Look for further spike after initial spike
+						for(uint64_t min_indx = 1, min_count = stock_spiked_json["resultsCount"]; min_indx < min_count; ++min_indx) {
+
+							// Price of stock on current minute
+							float current_minute_price = stock_spiked_json["results"][min_indx]["o"];
+
 							// After spike, stock price fell below previous day's closing price, so break: Does not qualify.
-							if(open_prices[i] <= prev_day_closing_price) {
+							if(current_minute_price < previous_day_closing_price) {
 
-std::cout << "It looks like the stock price fell below the previous day's closing price of: " << prev_day_closing_price << "\n" << " and hit a price of: " << open_prices[i] << std::endl;
+// std::cout << "It looks like the stock price fell below the previous day's closing price of: " << previous_day_closing_price << "\n" << " and hit a price of: " << current_minute_price << std::endl;
 								break;
 
 							}
-							
-							// Compute percent change between current open price and initial spike.
-							float further_climb = ((open_prices[i] - price_of_spike)/price_of_spike)*100;
-std::cout << "Percent change from last spike: " << further_climb << " at a price of: " << open_prices[i] << std::endl;
 
-std::cout << "Price that immediately follows: " << ((i+1 < 180) ? std::to_string(open_prices[i+1]) : "this was the last price") << std::endl; 
+
+							// Compute percent change between current open price and initial spike.
+							float further_climb = ((current_minute_price - price_of_spike)/price_of_spike)*100;
+// std::cout << "Percent change from last spike: " << further_climb << " at a price of: " << current_minute_price << std::endl;
+
+// std::cout << "Price that immediately follows: " << ((min_indx+1 < 180) ? std::to_string(static_cast<float>(stock_spiked_json["results"][min_indx+1]["o"])) : "this was the last price") << std::endl; 
 							// If stock climbed further, and open price of next minute was higher, then this stock qualifies 
 							// as one that spiked after the initial spike.
-							if( (further_climb >= 15) && (i+1 < 180) && (open_prices[i+1] > open_prices[i])) {
+							if( (further_climb >= 3) && (min_indx+1 < 240) /*&& (stock_spiked_json["results"][min_indx+1]["o"] > current_minute_price)*/ ) {
 
-std::cout << "Stock climbed another 15% or more and hit a price of: " << open_prices[i] << std::endl; 
+// std::cout << "Stock climbed another 10% or more and hit a price of: " << current_minute_price << std::endl; 
 								++numerator;
 
-								qualifies = true;
 
 								break;
 
@@ -301,12 +294,16 @@ std::cout << "Stock climbed another 15% or more and hit a price of: " << open_pr
 
 						}
 
-						// If the stock qualifies as one that we will invest in, then break and move on to the next day.
-						if(qualifies) break;
-						
+
+
 					}
+
+
+
 				}
-std::cout << "Switching previous date to: " <<  month+1 << "-" << day << "-" << year << std::endl;		
+
+
+// std::cout << "Switching previous date to: " <<  month+1 << "-" << day << "-" << year << std::endl;		
 
 				// Set previous date before going on to next day.
 				prev_month = month;
@@ -315,7 +312,6 @@ std::cout << "Switching previous date to: " <<  month+1 << "-" << day << "-" << 
 
 				prev_year = year;
 
-// std::cout << "Computing probability: " << ((denominator!=0) ? std::to_string(numerator/denominator) : "No 10%-15% spike found.") << std::endl;
 
 				// For now, work with one day
 				// return 0;
@@ -323,9 +319,12 @@ std::cout << "Switching previous date to: " <<  month+1 << "-" << day << "-" << 
 			}
 		}
 	}
+
+std::cout << "Number of responses lost in transmission: " <<  errors << std::endl;
+
 std::cout << "Numerator (Number of times stock spiked 15% or more further after already spiking 10%-15%: " << numerator << std::endl; 
 std::cout << "Denominator (Number of times stock spiked between 10%-15%): " << denominator << std::endl;
-std::cout << "Computing probability: " << ((denominator!=0) ? std::to_string(numerator/denominator) : "No 10%-15% spike found.") << std::endl;
+std::cout << "Computing probability: " << ((denominator!=0) ? std::to_string((static_cast<float>(numerator)/denominator)*100) : "No 10%-15% spike found.") << std::endl;
 
 	// curl_easy_cleanup(curl);
 	
