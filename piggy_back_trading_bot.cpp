@@ -220,7 +220,7 @@ std::cout << "==================================================================
 
 
 					// Stock spiked between 10%-15%
-					if((percent_diff >= 25)/* &&  (percent_diff <= 30)*/) {
+					if((percent_diff <= -10)/* &&  (percent_diff <= 30)*/) {
 // std::cout << "INSERTING " << percent_diff << " into vec." << std::endl;
 
 						// Insert spikes in vector
@@ -288,6 +288,9 @@ std::cout << "==================================================================
 
 					++spikes_indx;
 
+					bool spk_found = false;
+
+					bool drop_found = false;
 
 					// Look for further spike after initial spike
 					for(uint64_t min_indx = 1, min_count = stock_spiked_json["resultsCount"]; min_indx < min_count; ++min_indx) {
@@ -312,24 +315,35 @@ std::cout << "==================================================================
 // std::cout << "Price that immediately follows: " << ((min_indx+1 < 180) ? std::to_string(static_cast<float>(stock_spiked_json["results"][min_indx+1]["o"])) : "this was the last price") << std::endl; 
 						// If stock climbed further, and open price of next minute was higher, then this stock qualifies 
 						// as one that spiked after the initial spike.
-						if( (further_climb <= -5) ) {
+						if( (further_climb >= 10) /* && !(spk_found)*/ ) {
 
 
-std::cout << "TICKER: " << symb << " PERCENT SPIKE: " << spike_amt_percent <<  " PRICE: " << price_of_spike << " WINNER " <<std::endl;
+// std::cout << "TICKER: " << symb << " PERCENT SPIKE: " << spike_amt_percent <<  " PRICE: " << price_of_spike << " WINNER " <<std::endl;
 
 // std::cout << "Stock climbed another 10% or more and hit a price of: " << current_minute_price << std::endl; 
 							++numerator;
 
+							//spk_found = true;
 
 							break;
 
 						}
 
+						// else if((further_climb <= -5) && !(drop_found)) {
 
+						// 	drop_found = true;
+
+						// 	// ++numerator;
+						// }
+ 
+						// if(drop_found && spk_found) {
+						// 	++numerator;
+						// 	break;
+						// }
 
 
 					}
-std::cout << "TICKER: " <<  symb << " PERCENT SPIKE: " << spike_amt_percent <<  " PRICE: " << price_of_spike << " LOSER" <<std::endl;
+// std::cout << "TICKER: " <<  symb << " PERCENT SPIKE: " << spike_amt_percent <<  " PRICE: " << price_of_spike << " LOSER" <<std::endl;
 				}
 
 				
