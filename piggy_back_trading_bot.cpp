@@ -105,7 +105,7 @@ int main() {
 
 	uint64_t prev_day = 31; // Day 29
 
-	uint64_t prev_year = 2019; // Year 2017
+	uint64_t prev_year = 2015; // Year 2017
 
 	// For all stocks, number of 10%-15% spikes that occurred and climbed another 15%, or more, after that. 
 	uint64_t numerator = 0;
@@ -115,12 +115,14 @@ int main() {
 
 	float sum = 0;
 
+	float sum1 = 0;
+
 	uint64_t count = 0;
 
 	uint64_t errors = 0;
 
 	// Years range from [2018, 2021)
-	for(uint64_t year = 2020; year < 2021; ++year) {
+	for(uint64_t year = 2016; year < 2021; ++year) {
 
 		// If leap-year, adjust February accordingly.
 		if(year%4 == 0) months[1] = 29;
@@ -167,8 +169,10 @@ std::cout << "==================================================================
 
 					std::string symb = market_data_json["results"][ticker_indx]["T"];
 
+					float o = market_data_json["results"][ticker_indx]["o"];
+
 					// If ticker has weird symbols, or if ticker has low volume, then don't insert
-					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 1000000 )  || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) < 6) || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) > 7) ) continue;
+					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 1000000 ) || (o<1) || ( (o >3) && (o<4) ) || ( (o>6) && (o<7) ) || ( (o>10) && (o<12) ) || (o>14) ) continue;
 
 					prev_day_closing_price_map.emplace(symb, market_data_json["results"][ticker_indx]["c"]);
 				}
@@ -217,7 +221,7 @@ std::cout << "==================================================================
 // std::cout << market_data_json["results"][ticker_indx]["o"] << " closed at " << previous_day_closing_price << " the previous day." << std::endl;std::cout << market_data_json["results"][ticker_indx]["T"] << " closed at " << previous_day_closing_price << " the previous day." << std::endl;
 
 					float o = ((static_cast<float>(market_data_json["results"][ticker_indx]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
-					if((o>= 20)&&(o<=50)) {			
+					if((o>= 20)&&(o<=90)) {			
 
 						request = 	"https://api.polygon.io/v2/aggs/ticker/" + it->first + "/range/1/minute/" 
 
@@ -252,23 +256,43 @@ std::cout << "==================================================================
 							float percent_diff = ((static_cast<float>(stock_spiked_json["results"][i]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
 
 
-							if((percent_diff >= 20) && (percent_diff <= 50)) {
+							if((percent_diff >= 20) && (percent_diff <= 90)) {
 
 								float price_of_spike = stock_spiked_json["results"][i]["o"];
 
 								++denominator;
 
-								for(uint64_t j = i; j < stock_spiked_json["resultsCount"]; ++j) {
+								for(uint64_t j = i, len = stock_spiked_json["resultsCount"]; j < len; ++j) {
 
 									float current_minute_price = stock_spiked_json["results"][j]["o"];
 
 									float further_climb = ((current_minute_price - price_of_spike)/price_of_spike)*100;
+									
 
-
-									if(further_climb  >= 3) {
+									if(further_climb  >= 2) {
 
 										++numerator;
 
+
+										uint64_t k = j+1;
+
+										float p = further_climb;
+
+										while( (k < len) && (static_cast<float>(stock_spiked_json["results"][k]["o"]) > further_climb) ) {
+
+											p = stock_spiked_json["results"][k]["o"];
+
+											++k;
+										}
+
+										sum1 += p;
+
+										break;
+									}
+
+									if(j == (len - 1)) {
+										//++numerator;
+										sum += further_climb;
 										break;
 									}
 									
@@ -522,7 +546,8 @@ std::cout << "Number of responses lost in transmission: " <<  errors << std::end
 std::cout << "Numerator (Number of times stock spiked 15% or more further after already spiking 10%-15%: " << numerator << std::endl; 
 std::cout << "Denominator (Number of times stock spiked between 10%-15%): " << denominator << std::endl;
 std::cout << "Computing probability: " << ((denominator!=0) ? std::to_string((static_cast<float>(numerator)/denominator)*100) : "No 10%-15% spike found.") << std::endl;
-
+std::cout << "TOT LOSSES: " << sum << std::endl;
+std::cout << "TOT WINS: " << sum1 << std::endl;
 
 // std::cout << "COUNT: " << count << std::endl;
 // std::cout << "sum: " << sum << std::endl;
