@@ -168,7 +168,7 @@ std::cout << "==================================================================
 					std::string symb = market_data_json["results"][ticker_indx]["T"];
 
 					// If ticker has weird symbols, or if ticker has low volume, then don't insert
-					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 1000000 )  || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) < 3) || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) > 4) ) continue;
+					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 1000000 )  || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) < 6) || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) > 7) ) continue;
 
 					prev_day_closing_price_map.emplace(symb, market_data_json["results"][ticker_indx]["c"]);
 				}
