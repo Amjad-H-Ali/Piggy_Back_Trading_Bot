@@ -168,7 +168,7 @@ std::cout << "==================================================================
 					std::string symb = market_data_json["results"][ticker_indx]["T"];
 
 					// If ticker has weird symbols, or if ticker has low volume, then don't insert
-					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 1000000 )  || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) > 3 ) || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) < 2 )  ) continue;
+					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 1000000 )  || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) > 1) ) continue;
 
 					prev_day_closing_price_map.emplace(symb, market_data_json["results"][ticker_indx]["c"]);
 				}
@@ -217,7 +217,7 @@ std::cout << "==================================================================
 // std::cout << market_data_json["results"][ticker_indx]["o"] << " closed at " << previous_day_closing_price << " the previous day." << std::endl;std::cout << market_data_json["results"][ticker_indx]["T"] << " closed at " << previous_day_closing_price << " the previous day." << std::endl;
 
 					float o = ((static_cast<float>(market_data_json["results"][ticker_indx]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
-					if((o>= 20)&&(o<=35)) {			
+					if((o>= 20)&&(o<=50)) {			
 
 						request = 	"https://api.polygon.io/v2/aggs/ticker/" + it->first + "/range/1/minute/" 
 
@@ -252,7 +252,7 @@ std::cout << "==================================================================
 							float percent_diff = ((static_cast<float>(stock_spiked_json["results"][i]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
 
 
-							if((percent_diff >= 20) && (percent_diff <= 35)) {
+							if((percent_diff >= 20) && (percent_diff <= 50)) {
 
 								float price_of_spike = stock_spiked_json["results"][i]["o"];
 
