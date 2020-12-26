@@ -105,7 +105,7 @@ int main() {
 
 	uint64_t prev_day = 31; // Day 29
 
-	uint64_t prev_year = 2015; // Year 2017
+	uint64_t prev_year = 2019; // Year 2017
 
 	// For all stocks, number of 10%-15% spikes that occurred and climbed another 15%, or more, after that. 
 	uint64_t numerator = 0;
@@ -113,16 +113,16 @@ int main() {
 	// For all stocks, number of 10%-15% spikes that occurred.
 	uint64_t denominator = 0;
 
-	float sum = 0;
+	float gains = 0;
 
-	float sum1 = 0;
+	float losses = 0;
 
 	uint64_t count = 0;
 
 	uint64_t errors = 0;
 
 	// Years range from [2018, 2021)
-	for(uint64_t year = 2016; year < 2021; ++year) {
+	for(uint64_t year = 2020; year < 2021; ++year) {
 
 		// If leap-year, adjust February accordingly.
 		if(year%4 == 0) months[1] = 29;
@@ -133,11 +133,12 @@ int main() {
 		for(uint64_t  month = 0; month < 12; ++month) {
 
 
-std::cout << "====================================================================== START OF NEW MONTH ======================================================================" << std::endl << std::endl;
 
 
 			// Days range from [1,30], [1,31], [1,28], or [1,29] depending on month and if leap-year or not.
 			for(uint64_t day = 1, days_in_month = months[month]; day <= days_in_month; ++day) {
+
+std::cout << month+1 << "/" << day << "/" << year << std::endl;				
 
 				std::string response;
 
@@ -172,7 +173,7 @@ std::cout << "==================================================================
 					float o = market_data_json["results"][ticker_indx]["o"];
 
 					// If ticker has weird symbols, or if ticker has low volume, then don't insert
-					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 1000000 ) || (o<1) || ( (o >3) && (o<4) ) || ( (o>6) && (o<7) ) || ( (o>10) && (o<12) ) || (o>14) ) continue;
+					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 400000) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) > 1000000)  || (o>13)/*|| (o<1) || ( (o >3) && (o<4) ) || ( (o>6) && (o<7) ) || ( (o>10) && (o<12) ) || (o>14)*/) continue;
 
 					prev_day_closing_price_map.emplace(symb, market_data_json["results"][ticker_indx]["c"]);
 				}
@@ -201,10 +202,6 @@ std::cout << "==================================================================
 				if(market_data_json["resultsCount"] == 0) continue;
 
 
-				// For sorting the spikes in descending order
-				std::vector<std::tuple<std::string, float, float>> sorted_spikes;
-
-
 				// The previous day closing price of the stock
 				float previous_day_closing_price;
 
@@ -222,7 +219,7 @@ std::cout << "==================================================================
 
 					float percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
 
-					if(percent_change >= 5) {			
+					if(percent_change >= 1) {			
 
 						request = 	"https://api.polygon.io/v2/aggs/ticker/" + it->first + "/range/1/minute/" 
 
@@ -248,71 +245,196 @@ std::cout << "==================================================================
 
 						}
 
-						
+						if(stock_spiked_json["resultsCount"] < 3) continue;
 
 						float open_spike_price = market_data_json["results"][ticker_indx]["o"];
 
-						float further_climb_price = 0;
+						float peak_price = stock_spiked_json["results"][2]["c"];
+
+						float low_of_peak = stock_spiked_json["results"][2]["l"];
 
 						float dip_price = 0;
 
-						for(uint64_t minute_indx = 1, minute_count = stock_spiked_json["resultsCount"]; minute_indx < minute_count; ++minute_indx) {
+						float high_of_red = 0;
+
+						float retract_price = 0;
+
+						float low_of_green = 0;
+
+						uint64_t minute_count = stock_spiked_json["resultsCount"];
+
+						bool pass = true;
+
+						uint64_t minute_indx1;
+
+
+						if(stock_spiked_json["results"][0]["c"] <= stock_spiked_json["results"][0]["o"]) continue;
+
+						if(stock_spiked_json["results"][1]["c"] <= stock_spiked_json["results"][1]["o"]) continue;
+
+						if(stock_spiked_json["results"][2]["c"] <= stock_spiked_json["results"][2]["o"]) continue;
+
+						for(minute_indx1 = 3; minute_indx1 < minute_count; ++minute_indx1) {
 							
-							float curr_minute_price = stock_spiked_json["results"][minute_indx]["o"];
+							float curr_minute_price = stock_spiked_json["results"][minute_indx1]["c"];
+
 
 							// Price has fallen below today's open price: Does not qualify
-							if(curr_minute_price < open_spike_price) break;
+							if((curr_minute_price < open_spike_price) || (curr_minute_price < low_of_peak) || ((minute_indx1 + 1) >= minute_count) ) {
 
-							// Price is equal to today's open price: Continue to next minute
-							else if(curr_minute_price == open_spike_price) continue;
+								pass = false;
+								break;
+							}
 
-							// Price has climbed further since today's open price: Store the peak price
-							else if(curr_minute_price > further_climb_price) further_climb_price = curr_minute_price;
+							else if(curr_minute_price > open_spike_price) {
 
-							else if((curr_minute_price == further_climb_price) && (dip_price == 0)) continue;
+								if(curr_minute_price > peak_price) {
+									
+									peak_price = curr_minute_price;
 
-							// Price of stock, after climbing further from today's open, has turned the other direction (dipped): Store the lowest
-							else if(curr_minute_price < dip_price) dip_price = curr_minute_price;
+									low_of_peak = stock_spiked_json["results"][minute_indx1]["l"];
 
-							else if (curr_minute_price == dip_price) continue;
+								}
 
-							// Price of stock has regained from it's dip: Qualifies
-							else if(curr_minute_price > dip_price) {
+								else if(curr_minute_price < peak_price) {
+
+									high_of_red = stock_spiked_json["results"][minute_indx1]["h"];
+									
+									dip_price = curr_minute_price;
+									
+									break;
+								}
+							}
+
+							
+							
+						}
+
+						if(!pass) continue;
+
+						
+
+						uint64_t minute_indx2;
+						for(minute_indx2 = minute_indx1 + 1; minute_indx2 < minute_count; ++minute_indx2) {
+
+							float curr_minute_price = stock_spiked_json["results"][minute_indx2]["c"];
+
+							if((curr_minute_price < open_spike_price) || (curr_minute_price < low_of_peak) || ((minute_indx2 + 1) >= minute_count) ) {
+
+								pass = false;
+								break;
+
+							}
+
+							else if(curr_minute_price < dip_price) {
+								
+								dip_price = curr_minute_price;
+
+								high_of_red = stock_spiked_json["results"][minute_indx2]["h"];
+
+							}
+
+							else if((curr_minute_price > dip_price) && (curr_minute_price > high_of_red)) {
+
+std::cout << "D: " << stock_spiked_json["ticker"] << std::endl;
+
+std::cout << "Bought " << stock_spiked_json["ticker"] << " at $" << high_of_red << std::endl;
 
 								++denominator;
+								
+								retract_price = /*curr_minute_price;*/ high_of_red;
 
-								float percent_recover = ((curr_minute_price - dip_price)/dip_price)*100;
+								low_of_green = stock_spiked_json["results"][minute_indx2]["l"];
 
-								if(percent_recover >= 5) {
+								break;
+								
+							}
+
+							else if((curr_minute_price > dip_price) && (curr_minute_price <= high_of_red)) continue;
+
+						}
+
+						if(!pass) continue;
+
+						bool temp =false;
+						uint64_t minute_indx3;
+						for(minute_indx3 = minute_indx2 + 1; minute_indx3 < minute_count; ++minute_indx3) {
+
+							float curr_minute_price = stock_spiked_json["results"][minute_indx3]["c"];
+
+							
+
+							if((curr_minute_price <= open_spike_price) || (curr_minute_price <= low_of_peak) || ((minute_indx3 + 1) >= minute_count)) {
+
+
+std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << curr_minute_price << std::endl;
+
+								uint64_t shares = (3000/retract_price);
+
+								float pl = (shares*curr_minute_price) - (shares*retract_price);
+
+								gains += pl;
+
+								pass = false;
+								break;
+
+							}
+
+							else if(curr_minute_price >= retract_price) {
+								
+								low_of_green = stock_spiked_json["results"][minute_indx3]["l"];
+								if(!temp) {++numerator;temp = true;}
+
+								
+							/*
+								float further_percent_change = ((curr_minute_price - retract_price)/retract_price)*100;
+
+								if(further_percent_change >= 10) {
+
+std::cout << "N: " << stock_spiked_json["ticker"] << std::endl;
+
+
+std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << curr_minute_price << std::endl;
 
 									++numerator;
+
+
+									uint64_t shares = (3000/retract_price);
+
+									float pl = shares*(curr_minute_price - retract_price);
+
+									gains += pl;
+
+
 
 									break;
 								}
 
-								for(uint64_t minute_indx2 = minute_indx+1; minute_indx2 < minute_count; ++minute_indx2) {
-								
-									float curr_minute_price2 = stock_spiked_json["results"][minute_indx2]["o"];
+								else {
 
-									if(curr_minute_price2 < dip_price) break;
-
-									float percent_recover2 = ((curr_minute_price2- dip_price)/dip_price)*100;
-
-									if(percent_recover2 >= 5) {
-
-										++numerator;
-
-										break;
-									}
-
+									low_of_green = stock_spiked_json["results"][minute_indx3]["l"];
 								}
-
-								break;
+								
+								*/
 							}
+
+							else if(curr_minute_price <= low_of_green) {
+
+std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << low_of_green << std::endl;
+
+								uint64_t shares = (3000/retract_price);
+
+								float pl = shares*(low_of_green - retract_price);
+
+								gains += pl;
+								
+								break;
+
+							}
+							
 
 						}
 
-						break;
 
 					}
 					
@@ -334,8 +456,8 @@ std::cout << "Number of responses lost in transmission: " <<  errors << std::end
 std::cout << "Numerator (Number of times stock spiked 15% or more further after already spiking 10%-15%: " << numerator << std::endl; 
 std::cout << "Denominator (Number of times stock spiked between 10%-15%): " << denominator << std::endl;
 std::cout << "Computing probability: " << ((denominator!=0) ? std::to_string((static_cast<float>(numerator)/denominator)*100) : "No 10%-15% spike found.") << std::endl;
-std::cout << "TOT LOSSES: " << sum << std::endl;
-std::cout << "TOT WINS: " << sum1 << std::endl;
+std::cout << "TOT LOSSES: " << losses << std::endl;
+std::cout << "TOT WINS: " << gains << std::endl;
 
 // std::cout << "COUNT: " << count << std::endl;
 // std::cout << "sum: " << sum << std::endl;
