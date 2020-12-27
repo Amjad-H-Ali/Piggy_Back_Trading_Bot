@@ -121,8 +121,16 @@ int main() {
 
 	uint64_t errors = 0;
 
+	float real_gains_m = 50000;
+
+	std::vector<float> pl_percentages[2500];
+	uint64_t pl_indx = 0;
+
 	// Years range from [2018, 2021)
 	for(uint64_t year = 2020; year < 2021; ++year) {
+
+		std::vector<float> pl_percentages_y[365];
+		uint64_t pl_indx_y = 0;
 
 		// If leap-year, adjust February accordingly.
 		if(year%4 == 0) months[1] = 29;
@@ -132,11 +140,13 @@ int main() {
 		// Months range from [0,11]
 		for(uint64_t  month = 0; month < 12; ++month) {
 
+			std::vector<float> pl_percentages_m[35];
+			uint64_t pl_indx_m = 0;
 
 
 
 			// Days range from [1,30], [1,31], [1,28], or [1,29] depending on month and if leap-year or not.
-			for(uint64_t day = 1, days_in_month = months[month]; day <= days_in_month; ++day) {
+			for(uint64_t day = 1, days_in_month = months[month]; day <= days_in_month; ++day, ++pl_indx, ++pl_indx_y, ++pl_indx_m) {
 
 std::cout << month+1 << "/" << day << "/" << year << std::endl;				
 
@@ -173,7 +183,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 					float o = market_data_json["results"][ticker_indx]["o"];
 
 					// If ticker has weird symbols, or if ticker has low volume, then don't insert
-					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 400000) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) > 1000000)  || (o>13)/*|| (o<1) || ( (o >3) && (o<4) ) || ( (o>6) && (o<7) ) || ( (o>10) && (o<12) ) || (o>14)*/) continue;
+					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 400000) || /*(static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) > 1000000)  ||*/ (o<1) || (o>13)/*|| (o<1) || ( (o >3) && (o<4) ) || ( (o>6) && (o<7) ) || ( (o>10) && (o<12) ) || (o>14)*/) continue;
 
 					prev_day_closing_price_map.emplace(symb, market_data_json["results"][ticker_indx]["c"]);
 				}
@@ -219,7 +229,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
 					float percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
 
-					if(percent_change >= 1) {			
+					if(percent_change >= 5) {			
 
 						request = 	"https://api.polygon.io/v2/aggs/ticker/" + it->first + "/range/1/minute/" 
 
@@ -371,11 +381,20 @@ std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << curr_minute_pr
 
 								uint64_t shares = (3000/retract_price);
 
-								float pl = (shares*curr_minute_price) - (shares*retract_price);
+								float pl = shares*(curr_minute_price - retract_price);
 
 								gains += pl;
-
 								pass = false;
+
+
+								float percentage_gain = (curr_minute_price - retract_price)/retract_price;
+
+								pl_percentages[pl_indx].emplace_back(percentage_gain);
+
+								pl_percentages_y[pl_indx_y].emplace_back(percentage_gain);
+
+								pl_percentages_m[pl_indx_m].emplace_back(percentage_gain);
+
 								break;
 
 							}
@@ -427,6 +446,14 @@ std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << low_of_green <
 								float pl = shares*(low_of_green - retract_price);
 
 								gains += pl;
+
+								float percentage_gain = (low_of_green - retract_price)/retract_price;
+
+								pl_percentages[pl_indx].emplace_back(percentage_gain);
+
+								pl_percentages_y[pl_indx_y].emplace_back(percentage_gain);
+
+								pl_percentages_m[pl_indx_m].emplace_back(percentage_gain);
 								
 								break;
 
@@ -448,7 +475,72 @@ std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << low_of_green <
 				prev_year = year;
 
 			}
+
+
+			
+
+			for(uint64_t i = 0; i < 35; ++i) {
+
+				
+				uint64_t num_options = pl_percentages_m[i].size();
+
+				if(num_options == 0) continue;
+
+				float split_cap = real_gains_m/num_options;
+
+				for(float p : pl_percentages_m[i]) {
+
+					real_gains_m += (split_cap*p);
+				}
+				
+			}
+
+			std::cout << "Monthly GAINS/LOSSES: " << real_gains_m << std::endl;
+
+
+
+
 		}
+
+		float real_gains_y = 0;
+
+		for(uint64_t i = 0; i < 365; ++i) {
+
+			
+			uint64_t num_options = pl_percentages_y[i].size();
+
+			if(num_options == 0) continue;
+
+			float split_cap = 50000/num_options;
+
+			for(float p : pl_percentages_y[i]) {
+
+				real_gains_y += (split_cap*p);
+			}
+			
+		}
+
+		std::cout << "YEARLY REAL GAINS: " << real_gains_y << std::endl;
+	}
+
+	uint64_t capital = 50000;
+
+	float real_gains = 0;
+
+	for(uint64_t i = 0; i < 2500; ++i) {
+
+		
+		uint64_t num_options = pl_percentages[i].size();
+
+		if(num_options == 0) continue;
+
+		float split_cap = capital/num_options;
+
+		for(float p : pl_percentages[i]) {
+
+			capital += (split_cap*p);
+		}
+		
 	}
 
 std::cout << "Number of responses lost in transmission: " <<  errors << std::endl;
@@ -458,6 +550,7 @@ std::cout << "Denominator (Number of times stock spiked between 10%-15%): " << d
 std::cout << "Computing probability: " << ((denominator!=0) ? std::to_string((static_cast<float>(numerator)/denominator)*100) : "No 10%-15% spike found.") << std::endl;
 std::cout << "TOT LOSSES: " << losses << std::endl;
 std::cout << "TOT WINS: " << gains << std::endl;
+std::cout << "REAL GAINS: " << capital << std::endl;
 
 // std::cout << "COUNT: " << count << std::endl;
 // std::cout << "sum: " << sum << std::endl;
