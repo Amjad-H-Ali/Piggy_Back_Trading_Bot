@@ -105,7 +105,7 @@ int main() {
 
 	uint64_t prev_day = 31; // Day 29
 
-	uint64_t prev_year = 2019; // Year 2017
+	uint64_t prev_year = 2014; // Year 2017
 
 	// For all stocks, number of 10%-15% spikes that occurred and climbed another 15%, or more, after that. 
 	uint64_t numerator = 0;
@@ -127,7 +127,7 @@ int main() {
 	uint64_t pl_indx = 0;
 
 	// Years range from [2018, 2021)
-	for(uint64_t year = 2020; year < 2021; ++year) {
+	for(uint64_t year = 2015; year < 2021; ++year) {
 
 		std::vector<float> pl_percentages_y[365];
 		uint64_t pl_indx_y = 0;
@@ -530,11 +530,10 @@ std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << low_of_green <
 	for(uint64_t i = 0; i < 2500; ++i) {
 
 		
-		uint64_t num_options = pl_percentages[i].size();
-
-		if(num_options == 0) continue;
+		uint64_t num_options = std::max(static_cast<uint64_t>(1),static_cast<uint64_t>(pl_percentages[i].size()) );
 
 		float split_cap = capital/num_options;
+
 
 		for(float p : pl_percentages[i]) {
 
