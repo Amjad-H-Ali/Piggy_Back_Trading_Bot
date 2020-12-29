@@ -105,7 +105,7 @@ int main(void) {
 
 	uint64_t prev_day = 31; // Day 29
 
-	uint64_t prev_year = 2014; // Year 2017
+	uint64_t prev_year = 2019; // Year 2017
 
 	// For all stocks, number of 10%-15% spikes that occurred and climbed another 15%, or more, after that. 
 	uint64_t numerator = 0;
@@ -127,7 +127,7 @@ int main(void) {
 	uint64_t pl_indx = 0;
 
 	// Years range from [2018, 2021)
-	for(uint64_t year = 2015; year < 2021; ++year) {
+	for(uint64_t year = 2020; year < 2021; ++year) {
 
 		std::vector<float> pl_percentages_y[365];
 		uint64_t pl_indx_y = 0;
@@ -183,7 +183,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 					float o = market_data_json["results"][ticker_indx]["o"];
 
 					// If ticker has weird symbols, or if ticker has low volume, then don't insert
-					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 400000) || /*(static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) > 1000000)  ||*/ (o<1) || (o>13)/*|| (o<1) || ( (o >3) && (o<4) ) || ( (o>6) && (o<7) ) || ( (o>10) && (o<12) ) || (o>14)*/) continue;
+					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 400000) || (o<1)) continue;
 
 					prev_day_closing_price_map.emplace(symb, market_data_json["results"][ticker_indx]["c"]);
 				}
@@ -236,6 +236,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 								+  	std::to_string(get_time_in_ms(month, day, year, 8, 30, 0)) + "/" + std::to_string(get_time_in_ms(month, day, year, 12, 30, 0)) 
 						
 								+ 	"?unadjusted=false&sort=asc&limit=50000&apiKey=" STRINGIZE_VAL(APIKEYID); 
+
 
 						fulfill_request(request, response);
 
@@ -345,6 +346,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 							}
 
 							else if((curr_minute_price > dip_price) && (curr_minute_price > high_of_red)) {
+
+
 
 std::cout << "D: " << stock_spiked_json["ticker"] << std::endl;
 
