@@ -211,6 +211,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 				// Market was closed on this day, so continue to next day.
 				if(market_data_json["resultsCount"] == 0) continue;
 
+                
+
 
 				// The previous day closing price of the stock
 				float previous_day_closing_price;
