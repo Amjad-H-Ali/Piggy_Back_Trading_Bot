@@ -372,7 +372,9 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                                     float new_minute_high_price = stock_spiked_json["results"][new_minute_indx]["h"];
                                     float new_minute_low_price = stock_spiked_json["results"][new_minute_indx]["l"];
-
+                                    
+                                    breakpoint_low_price -= (breakpoint_low_price*0.01);
+                                    
                                     if(new_minute_low_price < breakpoint_low_price) {
 
                                         worst_case_sell_price = new_minute_low_price;
