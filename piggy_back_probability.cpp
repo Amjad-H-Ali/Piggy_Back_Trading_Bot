@@ -12,6 +12,8 @@ using json = nlohmann::json;
 
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
+#define GL_VEC_SZ 366
+#define GL_VEC_SZ_MO 35
 
 
 // Appends response to given output string
@@ -55,6 +57,12 @@ uint64_t fulfill_request(const std::string& request, std::string& response) {
 
 	return http_status_code;
 }
+struct Data {
+
+    float price;
+
+    float volume; 
+};
 
 // Convert a given date to a Unix time in ms.
 time_t get_time_in_ms(uint64_t month, uint64_t day, uint64_t year, uint64_t hour, uint64_t min, uint64_t sec) {
@@ -110,27 +118,32 @@ int main(void) {
 	// For all stocks, number of 10%-15% spikes that occurred and climbed another 15%, or more, after that. 
 	uint64_t numerator = 0;
 
+    uint64_t worst_numerator = 0;
+
+    uint64_t best_numerator = 0;
+
+    uint64_t mid_numerator = 0;
+
 	// For all stocks, number of 10%-15% spikes that occurred.
 	uint64_t denominator = 0;
+
+    std::vector<float> percent_GL_vecs[GL_VEC_SZ];
+
 
 	float gains = 0;
 
 	float losses = 0;
 
-	uint64_t count = 0;
-
 	uint64_t errors = 0;
 
-	float real_gains_m = 50000;
+    uint64_t percent_GL_indx = 0;
 
-	std::vector<float> pl_percentages[2500];
-	uint64_t pl_indx = 0;
+    float worst_cap_mo = 5000;
+    float best_cap_mo  = 5000;
+    float mid_cap_mo   = 5000;
 
 	// Years range from [2018, 2021)
 	for(uint64_t year = 2020; year < 2021; ++year) {
-
-		std::vector<float> pl_percentages_y[365];
-		uint64_t pl_indx_y = 0;
 
 		// If leap-year, adjust February accordingly.
 		if(year%4 == 0) months[1] = 29;
@@ -140,19 +153,19 @@ int main(void) {
 		// Months range from [0,11]
 		for(uint64_t  month = 0; month < 12; ++month) {
 
-			std::vector<float> pl_percentages_m[35];
-			uint64_t pl_indx_m = 0;
+            std::vector<float> percent_GL_vecs_mo[GL_VEC_SZ_MO];
 
+            uint64_t percent_GL_indx_mo = 0;
 
 
 			// Days range from [1,30], [1,31], [1,28], or [1,29] depending on month and if leap-year or not.
-			for(uint64_t day = 1, days_in_month = months[month]; day <= days_in_month; ++day, ++pl_indx, ++pl_indx_y, ++pl_indx_m) {
+			for(uint64_t day = 1, days_in_month = months[month]; day <= days_in_month; ++day, ++percent_GL_indx, ++percent_GL_indx_mo) {
 
 std::cout << month+1 << "/" << day << "/" << year << std::endl;				
 
 				std::string response;
 
-				std::map<std::string, float> prev_day_closing_price_map;
+				std::map<std::string, Data> prev_day_closing_price_map;
 
 				// Request the Previous day's closing price for all stocks
 				std::string request =	 "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/"
@@ -177,15 +190,18 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 				// Insert all stocks' previous day closing prices into the map
 				for(uint64_t ticker_indx = 0, ticker_count = market_data_json["resultsCount"]; ticker_indx < ticker_count; ++ticker_indx) {
 					
-
 					std::string symb = market_data_json["results"][ticker_indx]["T"];
 
-					float o = market_data_json["results"][ticker_indx]["o"];
-
 					// If ticker has weird symbols, or if ticker has low volume, then don't insert
-					if((symb.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 400000) || (o<1)) continue;
+					if(symb.size() > 10) continue;
 
-					prev_day_closing_price_map.emplace(symb, market_data_json["results"][ticker_indx]["c"]);
+                    Data data;
+
+                    data.price = market_data_json["results"][ticker_indx]["c"];
+
+                    data.volume = market_data_json["results"][ticker_indx]["v"];
+
+					prev_day_closing_price_map.emplace(symb,data);
 				}
 
 
@@ -212,26 +228,31 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 				if(market_data_json["resultsCount"] == 0) continue;
 
                 
-
-
 				// The previous day closing price of the stock
 				float previous_day_closing_price;
+
+                float previous_day_volume;
 
 				// Check the percent change of all stocks from their previous closing price
 				for(uint64_t ticker_indx = 0, ticker_count = market_data_json["resultsCount"]; ticker_indx < ticker_count; ++ticker_indx) {
 
-					std::map<std::string, float>::iterator it = prev_day_closing_price_map.find(market_data_json["results"][ticker_indx]["T"]);
+					std::map<std::string, Data>::iterator it = prev_day_closing_price_map.find(market_data_json["results"][ticker_indx]["T"]);
 
 					// Ticker does not have a previous day closing price; It must be a new ticker.
 					if(it == prev_day_closing_price_map.end()) continue;
 
 					// The previous day closing price of the stock
-					previous_day_closing_price = it->second;
+					previous_day_closing_price = (it->second).price;
+
+                    previous_day_volume = (it->second).volume;
+
 // std::cout << market_data_json["results"][ticker_indx]["o"] << " closed at " << previous_day_closing_price << " the previous day." << std::endl;std::cout << market_data_json["results"][ticker_indx]["T"] << " closed at " << previous_day_closing_price << " the previous day." << std::endl;
 
-					float percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
+					float price_percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["o"]) - previous_day_closing_price)/previous_day_closing_price)*100;
 
-					if(percent_change >= 5) {			
+                    float volume_percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["v"]) - previous_day_volume)/previous_day_volume)*100;
+
+					if((price_percent_change >= 5) && (volume_percent_change >= 500)) {			
 
 						request = 	"https://api.polygon.io/v2/aggs/ticker/" + it->first + "/range/1/minute/" 
 
@@ -257,216 +278,143 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 							continue;
 
 						}
+                        if(stock_spiked_json["resultsCount"] <= 0) continue;
+                        // if(stock_spiked_json["results"][0]["c"] <= stock_spiked_json["results"][0]["o"]) continue;
 
-						if(stock_spiked_json["resultsCount"] < 3) continue;
+                        float open_minute_close_price = stock_spiked_json["results"][0]["c"], 
+                              open_minute_open_price  = stock_spiked_json["results"][0]["o"], 
+                              open_minute_high_price  = stock_spiked_json["results"][0]["h"], 
+                              open_minute_low_price   = stock_spiked_json["results"][0]["l"], 
+                              open_current_vwap       = stock_spiked_json["results"][0]["vw"];     
 
-						float open_spike_price = market_data_json["results"][ticker_indx]["o"];
+                        for(uint64_t minute_indx = 0, minute_count = stock_spiked_json["resultsCount"]; minute_indx < minute_count; ++minute_indx) {
 
-						float peak_price = stock_spiked_json["results"][2]["c"];
 
-						float low_of_peak = stock_spiked_json["results"][2]["l"];
+                            float minute_close_price    = stock_spiked_json["results"][minute_indx]["c"],
+                                  minute_open_price     = stock_spiked_json["results"][minute_indx]["o"],
+                                  minute_high_price     = stock_spiked_json["results"][minute_indx]["h"],
+                                  minute_low_price      = stock_spiked_json["results"][minute_indx]["l"],
+                                  current_vwap          = stock_spiked_json["results"][minute_indx]["vw"],
+                                  best_case_buy_price   = -1,
+                                  worst_case_buy_price  = -1,
+                                  mid_case_buy_price    = -1,
+                                  best_case_sell_price  = -1,
+                                  worst_case_sell_price = -1,
+                                  mid_case_sell_price   = -1;
+                                  
 
-						float dip_price = 0;
+                            /*if(minute_low_price < open_minute_open_price) break;*/
 
-						float high_of_red = 0;
+                            if((minute_low_price <= current_vwap) /*&& (minute_low_price >= open_minute_open_price)*/) {
 
-						float retract_price = 0;
+                                best_case_buy_price  = minute_low_price;
 
-						float low_of_green = 0;
+                                mid_case_buy_price   = current_vwap;
 
-						uint64_t minute_count = stock_spiked_json["resultsCount"];
+                                worst_case_buy_price = minute_high_price;
 
-						bool pass = true;
+                                ++denominator;
 
-						uint64_t minute_indx1;
+                                float new_minute_indx = minute_indx+1;
 
+                                float breakpoint_low_price = minute_low_price;
+                                while(new_minute_indx  < minute_count) {
 
-						if(stock_spiked_json["results"][0]["c"] <= stock_spiked_json["results"][0]["o"]) continue;
+                                    float new_minute_high_price = stock_spiked_json["results"][new_minute_indx]["h"];
+                                    float new_minute_low_price = stock_spiked_json["results"][new_minute_indx]["l"];
 
-						if(stock_spiked_json["results"][1]["c"] <= stock_spiked_json["results"][1]["o"]) continue;
+                                    if(new_minute_low_price < breakpoint_low_price) {
 
-						if(stock_spiked_json["results"][2]["c"] <= stock_spiked_json["results"][2]["o"]) continue;
+                                        worst_case_sell_price = new_minute_low_price;
+                                        best_case_sell_price  = new_minute_high_price;
+                                        mid_case_sell_price   = breakpoint_low_price;
 
-						for(minute_indx1 = 3; minute_indx1 < minute_count; ++minute_indx1) {
-							
-							float curr_minute_price = stock_spiked_json["results"][minute_indx1]["c"];
+                                        float worst_case_percent_GL = ((worst_case_sell_price - worst_case_buy_price)/worst_case_buy_price);
+                                        float best_case_percent_GL = ((best_case_sell_price - best_case_buy_price)/best_case_buy_price);
+                                        float mid_case_percent_GL = ((mid_case_sell_price - mid_case_buy_price)/mid_case_buy_price);
 
+                                        percent_GL_vecs[percent_GL_indx].emplace_back(worst_case_percent_GL);
+                                        percent_GL_vecs[percent_GL_indx].emplace_back(best_case_percent_GL);
+                                        percent_GL_vecs[percent_GL_indx].emplace_back(mid_case_percent_GL);
 
-							// Price has fallen below today's open price: Does not qualify
-							if((curr_minute_price < open_spike_price) || (curr_minute_price < low_of_peak) || ((minute_indx1 + 1) >= minute_count) ) {
+                                        percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(worst_case_percent_GL);
+                                        percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(best_case_percent_GL);
+                                        percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(mid_case_percent_GL);
 
-								pass = false;
-								break;
-							}
+                                        if(worst_case_percent_GL > 0.01) {
 
-							else if(curr_minute_price > open_spike_price) {
+                                            ++worst_numerator;
+                                        }
+                                        if(best_case_percent_GL > 0.01) {
 
-								if(curr_minute_price > peak_price) {
-									
-									peak_price = curr_minute_price;
+                                            ++best_numerator;
+                                        }
+                                        if(mid_case_percent_GL > 0.01) {
 
-									low_of_peak = stock_spiked_json["results"][minute_indx1]["l"];
+                                            ++mid_numerator;
+                                        }
 
-								}
+                                        minute_indx = new_minute_indx;
 
-								else if(curr_minute_price < peak_price) {
+                                        break;
+                                    }
 
-									high_of_red = stock_spiked_json["results"][minute_indx1]["h"];
-									
-									dip_price = curr_minute_price;
-									
-									break;
-								}
-							}
+                                    else if(new_minute_low_price > breakpoint_low_price) {
 
-							
-							
-						}
+                                        breakpoint_low_price = new_minute_low_price;
+                                    }
 
-						if(!pass) continue;
+           
 
-						
+                                    ++new_minute_indx;
+                                }
+                                
+                                // Still holding positions and at end of day, so sell all positions.
+                                if(minute_indx != new_minute_indx) {
 
-						uint64_t minute_indx2;
-						for(minute_indx2 = minute_indx1 + 1; minute_indx2 < minute_count; ++minute_indx2) {
+                                    float new_minute_high_price = stock_spiked_json["results"][new_minute_indx-1]["h"];
+                                    float new_minute_low_price = stock_spiked_json["results"][new_minute_indx-1]["l"];
 
-							float curr_minute_price = stock_spiked_json["results"][minute_indx2]["c"];
+                                    worst_case_sell_price = new_minute_low_price;
+                                    best_case_sell_price  = new_minute_high_price;
+                                    mid_case_sell_price   = breakpoint_low_price;
 
-							if((curr_minute_price < open_spike_price) || (curr_minute_price < low_of_peak) || ((minute_indx2 + 1) >= minute_count) ) {
+                                    float worst_case_percent_GL = ((worst_case_sell_price - worst_case_buy_price)/worst_case_buy_price);
+                                    float best_case_percent_GL = ((best_case_sell_price - best_case_buy_price)/best_case_buy_price);
+                                    float mid_case_percent_GL = ((mid_case_sell_price - mid_case_buy_price)/mid_case_buy_price);
 
-								pass = false;
-								break;
+                                    percent_GL_vecs[percent_GL_indx].emplace_back(worst_case_percent_GL);
+                                    percent_GL_vecs[percent_GL_indx].emplace_back(best_case_percent_GL);
+                                    percent_GL_vecs[percent_GL_indx].emplace_back(mid_case_percent_GL);
 
-							}
+                                    percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(worst_case_percent_GL);
+                                    percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(best_case_percent_GL);
+                                    percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(mid_case_percent_GL);
 
-							else if(curr_minute_price < dip_price) {
-								
-								dip_price = curr_minute_price;
+                                    if(worst_case_percent_GL > 0.01) {
 
-								high_of_red = stock_spiked_json["results"][minute_indx2]["h"];
+                                        ++worst_numerator;
+                                    }
+                                    if(best_case_percent_GL > 0.01) {
 
-							}
+                                        ++best_numerator;
+                                    }
+                                    if(mid_case_percent_GL > 0.01) {
 
-							else if((curr_minute_price > dip_price) && (curr_minute_price > high_of_red)) {
+                                        ++mid_numerator;
+                                    }
 
+                                    break; // Break out of for-loop
 
 
-std::cout << "D: " << stock_spiked_json["ticker"] << std::endl;
+                                }
 
-std::cout << "Bought " << stock_spiked_json["ticker"] << " at $" << high_of_red << std::endl;
+                                // break;
 
-								++denominator;
-								
-								retract_price = /*curr_minute_price;*/ high_of_red;
 
-								low_of_green = stock_spiked_json["results"][minute_indx2]["l"];
+                            }
 
-								break;
-								
-							}
-
-							else if((curr_minute_price > dip_price) && (curr_minute_price <= high_of_red)) continue;
-
-						}
-
-						if(!pass) continue;
-
-						bool temp =false;
-						uint64_t minute_indx3;
-						for(minute_indx3 = minute_indx2 + 1; minute_indx3 < minute_count; ++minute_indx3) {
-
-							float curr_minute_price = stock_spiked_json["results"][minute_indx3]["c"];
-
-							
-
-							if((curr_minute_price <= open_spike_price) || (curr_minute_price <= low_of_peak) || ((minute_indx3 + 1) >= minute_count)) {
-
-
-std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << curr_minute_price << std::endl;
-
-								uint64_t shares = (3000/retract_price);
-
-								float pl = shares*(curr_minute_price - retract_price);
-
-								gains += pl;
-								pass = false;
-
-
-								float percentage_gain = (curr_minute_price - retract_price)/retract_price;
-
-								pl_percentages[pl_indx].emplace_back(percentage_gain);
-
-								pl_percentages_y[pl_indx_y].emplace_back(percentage_gain);
-
-								pl_percentages_m[pl_indx_m].emplace_back(percentage_gain);
-
-								break;
-
-							}
-
-							else if(curr_minute_price >= retract_price) {
-								
-								low_of_green = stock_spiked_json["results"][minute_indx3]["l"];
-								if(!temp) {++numerator;temp = true;}
-
-								
-							/*
-								float further_percent_change = ((curr_minute_price - retract_price)/retract_price)*100;
-
-								if(further_percent_change >= 10) {
-
-std::cout << "N: " << stock_spiked_json["ticker"] << std::endl;
-
-
-std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << curr_minute_price << std::endl;
-
-									++numerator;
-
-
-									uint64_t shares = (3000/retract_price);
-
-									float pl = shares*(curr_minute_price - retract_price);
-
-									gains += pl;
-
-
-
-									break;
-								}
-
-								else {
-
-									low_of_green = stock_spiked_json["results"][minute_indx3]["l"];
-								}
-								
-								*/
-							}
-
-							else if(curr_minute_price <= low_of_green) {
-
-std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << low_of_green << std::endl;
-
-								uint64_t shares = (3000/retract_price);
-
-								float pl = shares*(low_of_green - retract_price);
-
-								gains += pl;
-
-								float percentage_gain = (low_of_green - retract_price)/retract_price;
-
-								pl_percentages[pl_indx].emplace_back(percentage_gain);
-
-								pl_percentages_y[pl_indx_y].emplace_back(percentage_gain);
-
-								pl_percentages_m[pl_indx_m].emplace_back(percentage_gain);
-								
-								break;
-
-							}
-							
-
-						}
-
+                        }
 
 					}
 					
@@ -481,86 +429,130 @@ std::cout << "Sold " << stock_spiked_json["ticker"] << " at $" << low_of_green <
 
 			}
 
+            std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
 
-			
+            std::string MO[12] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
 
-			for(uint64_t i = 0; i < 35; ++i) {
+            std::cout << "====================" << MO[month] << " Results" << "====================" << std::endl;
 
-				
-				uint64_t num_options = pl_percentages_m[i].size();
+            float old_worst_cap_mo = worst_cap_mo;
+            float old_best_cap_mo = best_cap_mo;
+            float old_mid_cap_mo = mid_cap_mo;
 
-				if(num_options == 0) continue;
+            for(uint64_t i = 0; i < GL_VEC_SZ_MO; ++i) {
 
-				float split_cap = real_gains_m/num_options;
+                uint64_t opportunities = percent_GL_vecs_mo[i].size()/2;
 
-				for(float p : pl_percentages_m[i]) {
+                std::cout << "Opportunities: " << opportunities << std::endl;
 
-					real_gains_m += (split_cap*p);
-				}
-				
-			}
-
-			std::cout << "Monthly GAINS/LOSSES: " << real_gains_m << std::endl;
+                float worst_cap_distrib = worst_cap_mo/opportunities;
+                float best_cap_distrib  = best_cap_mo/opportunities;
+                float mid_cap_distrib   = mid_cap_mo/opportunities;
 
 
+                for(uint64_t j = 0, len = percent_GL_vecs_mo[i].size(); j+2 < len; j+=3) {
+
+                    float worst_percent = percent_GL_vecs_mo[i][j];
+                    float best_percent  = percent_GL_vecs_mo[i][j+1];
+                    float mid_percent   = percent_GL_vecs_mo[i][j+2];
+
+                    std::cout << "Worst % " << worst_percent << std::endl;
+
+                    std::cout << "Best % " << best_percent << std::endl;
+
+                    std::cout << "Mid % " << mid_percent << std::endl;
+
+                    worst_cap_mo += (worst_cap_distrib*worst_percent);
+                    best_cap_mo  += (best_cap_distrib*best_percent);
+                    mid_cap_mo   += (mid_cap_distrib*mid_percent);
+
+
+                }
+
+                std::cout << "Day's End Worst Cap: " << worst_cap_mo << std::endl;
+                std::cout << "Day's End Best Cap: " << best_cap_mo << std::endl;
+                std::cout << "Day's End Mid Cap: " << mid_cap_mo << std::endl;
+            }
+
+            
+            std::cout << "******************** " << "Month's Worst GL: " << (worst_cap_mo - old_worst_cap_mo) << " ********************" << std::endl;
+
+            std::cout << "******************** " << "Month's Best GL: " << (best_cap_mo - old_best_cap_mo) << " ********************" << std::endl;
+
+            std::cout << "******************** " << "Month's Mid GL: " << (mid_cap_mo - old_mid_cap_mo) << " ********************" << std::endl;
+
+            std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
 
 
 		}
 
-		float real_gains_y = 0;
 
-		for(uint64_t i = 0; i < 365; ++i) {
 
-			
-			uint64_t num_options = pl_percentages_y[i].size();
-
-			if(num_options == 0) continue;
-
-			float split_cap = 50000/num_options;
-
-			for(float p : pl_percentages_y[i]) {
-
-				real_gains_y += (split_cap*p);
-			}
-			
-		}
-
-		std::cout << "YEARLY REAL GAINS: " << real_gains_y << std::endl;
 	}
 
-	uint64_t capital = 50000;
+    std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
+    std::cout << "Numerator: " << numerator << std::endl;
+    std::cout << "Denominator: " << denominator << std::endl;
+    std::cout << "Probability: " << ((denominator != 0) ? (std::to_string((static_cast<float>(numerator)/denominator)*100) + "%") : "0%") << std::endl;
 
-	float real_gains = 0;
+    std::cout << "Best Numerator: " << best_numerator << std::endl;
+    std::cout << "Best Case Probability: " << ((denominator != 0) ? (std::to_string((static_cast<float>(best_numerator)/denominator)*100) + "%") : "0%") << std::endl;
 
-	for(uint64_t i = 0; i < 2500; ++i) {
-
-		
-		uint64_t num_options = std::max(static_cast<uint64_t>(1),static_cast<uint64_t>(pl_percentages[i].size()) );
-
-		float split_cap = capital/num_options;
-
-
-		for(float p : pl_percentages[i]) {
-
-			capital += (split_cap*p);
-		}
-		
-	}
-
-std::cout << "Number of responses lost in transmission: " <<  errors << std::endl;
-
-std::cout << "Numerator (Number of times stock spiked 15% or more further after already spiking 10%-15%: " << numerator << std::endl; 
-std::cout << "Denominator (Number of times stock spiked between 10%-15%): " << denominator << std::endl;
-std::cout << "Computing probability: " << ((denominator!=0) ? std::to_string((static_cast<float>(numerator)/denominator)*100) : "No 10%-15% spike found.") << std::endl;
-std::cout << "TOT LOSSES: " << losses << std::endl;
-std::cout << "TOT WINS: " << gains << std::endl;
-std::cout << "REAL GAINS: " << capital << std::endl;
-
-// std::cout << "COUNT: " << count << std::endl;
-// std::cout << "sum: " << sum << std::endl;
-// std::cout << "Computing probability2: " << ((count!=0) ? std::to_string((static_cast<float>(sum)/count)) : "It's 0") << std::endl;
-	// curl_easy_cleanup(curl);
+    std::cout << "Worst Numerator: " << worst_numerator << std::endl;
+    std::cout << "Worst Case Probability: " << ((denominator != 0) ? (std::to_string((static_cast<float>(worst_numerator)/denominator)*100) + "%") : "0%") << std::endl;
 	
+
+    std::cout << "Mid Numerator: " << mid_numerator << std::endl;
+    std::cout << "Mid Case Probability: " << ((denominator != 0) ? (std::to_string((static_cast<float>(mid_numerator)/denominator)*100) + "%") : "0%") << std::endl;
+    std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
+
+
+    float worst_cap = 5000;
+    float best_cap  = 5000;
+    float mid_cap   = 5000;
+
+    for(uint64_t i = 0; i < GL_VEC_SZ; ++i) {
+
+        uint64_t opportunities = percent_GL_vecs[i].size()/2;
+
+        std::cout << "Opportunities: " << opportunities << std::endl;
+
+        float worst_cap_distrib = worst_cap/opportunities;
+        float best_cap_distrib  = best_cap/opportunities;
+        float mid_cap_distrib   = mid_cap/opportunities;
+
+        for(uint64_t j = 0, len = percent_GL_vecs[i].size(); j+2 < len; j+=3) {
+
+            float worst_percent = percent_GL_vecs[i][j];
+            float best_percent  = percent_GL_vecs[i][j+1];
+            float mid_percent   = percent_GL_vecs[i][j+2];
+
+            std::cout << "Worst % " << worst_percent << std::endl;
+
+            std::cout << "Best % " << best_percent << std::endl;
+
+            std::cout << "Mid % " << mid_percent << std::endl;
+
+            worst_cap += (worst_cap_distrib*worst_percent);
+            best_cap  += (best_cap_distrib*best_percent);
+            mid_cap   += (mid_cap_distrib*mid_percent);
+
+            std::cout << "Worst Cap: " << worst_cap << std::endl;
+            std::cout << "Best Cap: " << best_cap << std::endl;
+            std::cout << "Mid Cap: " << mid_cap << std::endl;
+        }
+    }
+
+    
+    std::cout << "Worst GL: " << (worst_cap - 5000) << std::endl;
+
+    std::cout << "Best GL: " << (best_cap - 5000) << std::endl;
+
+    std::cout << "Mid GL: " << (mid_cap - 5000) << std::endl;
+
+    std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
+
+
     return 0;
 
 #else   
