@@ -12,7 +12,7 @@ using json = nlohmann::json;
 
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
-#define GL_VEC_SZ 2196
+#define GL_VEC_SZ 366
 #define GL_VEC_SZ_MO 35
 
 
@@ -113,7 +113,7 @@ int main(void) {
 
 	uint64_t prev_day = 31; // Day 29
 
-	uint64_t prev_year = 2014; // Year 2017
+	uint64_t prev_year = 2019; // Year 2017
 
 	// For all stocks, number of 10%-15% spikes that occurred and climbed another 15%, or more, after that. 
 	uint64_t numerator = 0;
@@ -145,7 +145,7 @@ int main(void) {
     float tot = 0;
 
 	// Years range from [2018, 2021)
-	for(uint64_t year = 2015; year < 2021; ++year) {
+	for(uint64_t year = 2020; year < 2021; ++year) {
 
 		// If leap-year, adjust February accordingly.
 		if(year%4 == 0) months[1] = 29;
@@ -183,7 +183,28 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
 				fulfill_request(request, response);
 
-				auto market_data_json = json::parse(response);
+                decltype(json::parse(response)) market_data_json;
+
+                try {
+
+                    market_data_json = json::parse(response);
+                }
+                catch(nlohmann::detail::parse_error err) {
+
+                    std::cerr << "Part of response lost in transmission" << std::endl;
+
+                    ++errors;
+
+                    --day;
+                    --percent_GL_indx;
+                    --percent_GL_indx_mo;
+
+                    continue;
+
+                }
+
+
+
 
 				// Either today's date, future date, or market was closed: Cannot get day's closing price.
 				if(market_data_json["resultsCount"] == 0) continue;
@@ -222,7 +243,23 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 				fulfill_request(request, response);
 
 				
-				market_data_json = json::parse(response);
+				try {
+
+                    market_data_json = json::parse(response);
+                }
+                catch(nlohmann::detail::parse_error err) {
+
+                    std::cerr << "Part of response lost in transmission" << std::endl;
+
+                    ++errors;
+
+                    --day;
+                    --percent_GL_indx;
+                    --percent_GL_indx_mo;
+
+                    continue;
+
+                }
 
 // std::cout << "Market was open? " << ((market_data_json["resultsCount"]==0) ? "False" : "True") << std::endl;
 
@@ -278,6 +315,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
 							++errors;
 
+                            --ticker_indx;
+
 							continue;
 
 						}
@@ -311,6 +350,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                   
 
                             /*if(minute_low_price < open_minute_open_price) break;*/
+
+                            current_vwap -= (current_vwap*0.05);
 
                             if((minute_low_price <= current_vwap) /*&& (minute_low_price >= open_minute_open_price)*/) {
 
