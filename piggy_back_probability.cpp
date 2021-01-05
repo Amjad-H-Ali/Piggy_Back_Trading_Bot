@@ -12,7 +12,7 @@ using json = nlohmann::json;
 
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
-#define GL_VEC_SZ 366
+#define GL_VEC_SZ 2196
 #define GL_VEC_SZ_MO 35
 
 
@@ -113,7 +113,7 @@ int main(void) {
 
 	uint64_t prev_day = 31; // Day 29
 
-	uint64_t prev_year = 2019; // Year 2017
+	uint64_t prev_year = 2014; // Year 2017
 
 	// For all stocks, number of 10%-15% spikes that occurred and climbed another 15%, or more, after that. 
 	uint64_t numerator = 0;
@@ -127,7 +127,7 @@ int main(void) {
 	// For all stocks, number of 10%-15% spikes that occurred.
 	uint64_t denominator = 0;
 
-    std::vector<float> percent_GL_vecs[GL_VEC_SZ];
+    std::map<std::string, std::vector<float>> percent_GL_vecs[GL_VEC_SZ];
 
 
 	float gains = 0;
@@ -142,8 +142,10 @@ int main(void) {
     float best_cap_mo  = 5000;
     float mid_cap_mo   = 5000;
 
+    float tot = 0;
+
 	// Years range from [2018, 2021)
-	for(uint64_t year = 2020; year < 2021; ++year) {
+	for(uint64_t year = 2015; year < 2021; ++year) {
 
 		// If leap-year, adjust February accordingly.
 		if(year%4 == 0) months[1] = 29;
@@ -153,13 +155,14 @@ int main(void) {
 		// Months range from [0,11]
 		for(uint64_t  month = 0; month < 12; ++month) {
 
-            std::vector<float> percent_GL_vecs_mo[GL_VEC_SZ_MO];
+            std::map<std::string, std::vector<float>> percent_GL_vecs_mo[GL_VEC_SZ_MO];
 
             uint64_t percent_GL_indx_mo = 0;
 
 
 			// Days range from [1,30], [1,31], [1,28], or [1,29] depending on month and if leap-year or not.
 			for(uint64_t day = 1, days_in_month = months[month]; day <= days_in_month; ++day, ++percent_GL_indx, ++percent_GL_indx_mo) {
+
 
 std::cout << month+1 << "/" << day << "/" << year << std::endl;				
 
@@ -252,11 +255,11 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                     float volume_percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["v"]) - previous_day_volume)/previous_day_volume)*100;
 
-					if((price_percent_change >= 5) && (volume_percent_change >= 500)) {			
+					if((price_percent_change >= 5) && (volume_percent_change >= 500) && (previous_day_volume > 150000)) {			
 
 						request = 	"https://api.polygon.io/v2/aggs/ticker/" + it->first + "/range/1/minute/" 
 
-								+  	std::to_string(get_time_in_ms(month, day, year, 8, 30, 0)) + "/" + std::to_string(get_time_in_ms(month, day, year, 12, 30, 0)) 
+								+  	std::to_string(get_time_in_ms(month, day, year, 8, 30, 0)) + "/" + std::to_string(get_time_in_ms(month, day, year, 9, 0, 0)) 
 						
 								+ 	"?unadjusted=false&sort=asc&limit=50000&apiKey=" STRINGIZE_VAL(APIKEYID); 
 
@@ -285,10 +288,14 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                               open_minute_open_price  = stock_spiked_json["results"][0]["o"], 
                               open_minute_high_price  = stock_spiked_json["results"][0]["h"], 
                               open_minute_low_price   = stock_spiked_json["results"][0]["l"], 
-                              open_current_vwap       = stock_spiked_json["results"][0]["vw"];     
+                              open_current_vwap       = stock_spiked_json["results"][0]["vw"];    
 
-                        for(uint64_t minute_indx = 0, minute_count = stock_spiked_json["resultsCount"]; minute_indx < minute_count; ++minute_indx) {
+                        std::string ticker = stock_spiked_json["ticker"]; 
 
+                        for(uint64_t minute_indx = 0, minute_count = stock_spiked_json["resultsCount"]; minute_indx < minute_count; /*++minute_indx*/) {
+
+                            
+                        
 
                             float minute_close_price    = stock_spiked_json["results"][minute_indx]["c"],
                                   minute_open_price     = stock_spiked_json["results"][minute_indx]["o"],
@@ -313,6 +320,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                                 worst_case_buy_price = minute_high_price;
 
+                                std::cout << month+1 << "-" << day << "-" << year << " Bought " << ticker << " @ " << mid_case_buy_price << std::endl << std::endl;
+ 
                                 ++denominator;
 
                                 float new_minute_indx = minute_indx+1;
@@ -329,17 +338,24 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                         best_case_sell_price  = new_minute_high_price;
                                         mid_case_sell_price   = breakpoint_low_price;
 
+                                        tot += (mid_case_sell_price - mid_case_buy_price);
+
+                                        std::cout << month+1 << "-" << day << "-" << year << " Sold " << ticker << " @ " << mid_case_sell_price << std::endl << std::endl;
+
+
                                         float worst_case_percent_GL = ((worst_case_sell_price - worst_case_buy_price)/worst_case_buy_price);
                                         float best_case_percent_GL = ((best_case_sell_price - best_case_buy_price)/best_case_buy_price);
                                         float mid_case_percent_GL = ((mid_case_sell_price - mid_case_buy_price)/mid_case_buy_price);
+                                        
+                                        
 
-                                        percent_GL_vecs[percent_GL_indx].emplace_back(worst_case_percent_GL);
-                                        percent_GL_vecs[percent_GL_indx].emplace_back(best_case_percent_GL);
-                                        percent_GL_vecs[percent_GL_indx].emplace_back(mid_case_percent_GL);
+                                        percent_GL_vecs[percent_GL_indx][ticker].emplace_back(worst_case_percent_GL);
+                                        percent_GL_vecs[percent_GL_indx][ticker].emplace_back(best_case_percent_GL);
+                                        percent_GL_vecs[percent_GL_indx][ticker].emplace_back(mid_case_percent_GL);
 
-                                        percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(worst_case_percent_GL);
-                                        percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(best_case_percent_GL);
-                                        percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(mid_case_percent_GL);
+                                        percent_GL_vecs_mo[percent_GL_indx_mo][ticker].emplace_back(worst_case_percent_GL);
+                                        percent_GL_vecs_mo[percent_GL_indx_mo][ticker].emplace_back(best_case_percent_GL);
+                                        percent_GL_vecs_mo[percent_GL_indx_mo][ticker].emplace_back(mid_case_percent_GL);
 
                                         if(worst_case_percent_GL > 0.01) {
 
@@ -379,17 +395,21 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                     best_case_sell_price  = new_minute_high_price;
                                     mid_case_sell_price   = breakpoint_low_price;
 
+                                    tot += (mid_case_sell_price - mid_case_buy_price);
+
+                                    std::cout << month+1 << "-" << day << "-" << year << " Sold " << ticker << " @ " << mid_case_sell_price << std::endl << std::endl;
+
                                     float worst_case_percent_GL = ((worst_case_sell_price - worst_case_buy_price)/worst_case_buy_price);
                                     float best_case_percent_GL = ((best_case_sell_price - best_case_buy_price)/best_case_buy_price);
                                     float mid_case_percent_GL = ((mid_case_sell_price - mid_case_buy_price)/mid_case_buy_price);
 
-                                    percent_GL_vecs[percent_GL_indx].emplace_back(worst_case_percent_GL);
-                                    percent_GL_vecs[percent_GL_indx].emplace_back(best_case_percent_GL);
-                                    percent_GL_vecs[percent_GL_indx].emplace_back(mid_case_percent_GL);
+                                    percent_GL_vecs[percent_GL_indx][ticker].emplace_back(worst_case_percent_GL);
+                                    percent_GL_vecs[percent_GL_indx][ticker].emplace_back(best_case_percent_GL);
+                                    percent_GL_vecs[percent_GL_indx][ticker].emplace_back(mid_case_percent_GL);
 
-                                    percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(worst_case_percent_GL);
-                                    percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(best_case_percent_GL);
-                                    percent_GL_vecs_mo[percent_GL_indx_mo].emplace_back(mid_case_percent_GL);
+                                    percent_GL_vecs_mo[percent_GL_indx_mo][ticker].emplace_back(worst_case_percent_GL);
+                                    percent_GL_vecs_mo[percent_GL_indx_mo][ticker].emplace_back(best_case_percent_GL);
+                                    percent_GL_vecs_mo[percent_GL_indx_mo][ticker].emplace_back(mid_case_percent_GL);
 
                                     if(worst_case_percent_GL > 0.01) {
 
@@ -407,13 +427,16 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                     break; // Break out of for-loop
 
 
-                                }
+                                } 
 
-                                break;
+                                else continue; // Do not increment minute_indx
+
+                                // break
 
 
-                            }
+                            } // bought
 
+                            ++minute_indx;
                         }
 
 					}
@@ -439,9 +462,15 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
             float old_best_cap_mo = best_cap_mo;
             float old_mid_cap_mo = mid_cap_mo;
 
+            uint64_t dy = 1;
+
             for(uint64_t i = 0; i < GL_VEC_SZ_MO; ++i) {
 
-                uint64_t opportunities = percent_GL_vecs_mo[i].size()/2;
+                uint64_t opportunities = percent_GL_vecs_mo[i].size();
+
+                std::cout << "DAY: " << dy++ << std::endl;
+
+                if(dy >= months[month]) dy = 1;
 
                 std::cout << "Opportunities: " << opportunities << std::endl;
 
@@ -449,24 +478,36 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                 float best_cap_distrib  = best_cap_mo/opportunities;
                 float mid_cap_distrib   = mid_cap_mo/opportunities;
 
+                for(auto& vec_pair : percent_GL_vecs_mo[i]) {
 
-                for(uint64_t j = 0, len = percent_GL_vecs_mo[i].size(); j+2 < len; j+=3) {
+                    std::string ticker = vec_pair.first;
 
-                    float worst_percent = percent_GL_vecs_mo[i][j];
-                    float best_percent  = percent_GL_vecs_mo[i][j+1];
-                    float mid_percent   = percent_GL_vecs_mo[i][j+2];
+                    auto& vec = vec_pair.second;
 
-                    std::cout << "Worst % " << worst_percent << std::endl;
+                    std::cout << "Trading " << ticker << " " << vec.size()/3 << " times" << std::endl;
 
-                    std::cout << "Best % " << best_percent << std::endl;
+                    for(uint64_t j = 0, len = vec.size(); j+2 < len; j+=3) {
 
-                    std::cout << "Mid % " << mid_percent << std::endl;
+                        float worst_percent = vec[j];
+                        float best_percent  = vec[j+1];
+                        float mid_percent   = vec[j+2];
 
-                    worst_cap_mo += (worst_cap_distrib*worst_percent);
-                    best_cap_mo  += (best_cap_distrib*best_percent);
-                    mid_cap_mo   += (mid_cap_distrib*mid_percent);
+                        /*
+
+                        std::cout << "Worst % " << worst_percent << std::endl;
+
+                        std::cout << "Best % " << best_percent << std::endl;
+
+                        std::cout << "Mid % " << mid_percent << std::endl;
+
+                        */
+
+                        worst_cap_mo += (worst_cap_distrib*worst_percent);
+                        best_cap_mo  += (best_cap_distrib*best_percent);
+                        mid_cap_mo   += (mid_cap_distrib*mid_percent);
 
 
+                    }
                 }
 
                 std::cout << "Day's End Worst Cap: " << worst_cap_mo << std::endl;
@@ -513,42 +554,57 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
     for(uint64_t i = 0; i < GL_VEC_SZ; ++i) {
 
-        uint64_t opportunities = percent_GL_vecs[i].size()/2;
+        uint64_t opportunities = percent_GL_vecs[i].size();
 
-        std::cout << "Opportunities: " << opportunities << std::endl;
+        // std::cout << "Opportunities: " << opportunities << std::endl;
 
         float worst_cap_distrib = worst_cap/opportunities;
         float best_cap_distrib  = best_cap/opportunities;
         float mid_cap_distrib   = mid_cap/opportunities;
 
-        for(uint64_t j = 0, len = percent_GL_vecs[i].size(); j+2 < len; j+=3) {
+        for(auto& vec_pair : percent_GL_vecs[i]) {
 
-            float worst_percent = percent_GL_vecs[i][j];
-            float best_percent  = percent_GL_vecs[i][j+1];
-            float mid_percent   = percent_GL_vecs[i][j+2];
+            std::string ticker = vec_pair.first;
 
-            std::cout << "Worst % " << worst_percent << std::endl;
 
-            std::cout << "Best % " << best_percent << std::endl;
+            auto& vec = vec_pair.second;
 
-            std::cout << "Mid % " << mid_percent << std::endl;
+            // std::cout << "Trading " << ticker << " " << vec.size()/3 << " times" << std::endl;
 
-            worst_cap += (worst_cap_distrib*worst_percent);
-            best_cap  += (best_cap_distrib*best_percent);
-            mid_cap   += (mid_cap_distrib*mid_percent);
+            for(uint64_t j = 0, len = vec.size(); j+2 < len; j+=3) {
 
-            std::cout << "Worst Cap: " << worst_cap << std::endl;
-            std::cout << "Best Cap: " << best_cap << std::endl;
-            std::cout << "Mid Cap: " << mid_cap << std::endl;
+                float worst_percent = vec[j];
+                float best_percent  = vec[j+1];
+                float mid_percent   = vec[j+2];
+
+                /*
+                std::cout << "Worst % " << worst_percent << std::endl;
+
+                std::cout << "Best % " << best_percent << std::endl;
+
+                std::cout << "Mid % " << mid_percent << std::endl;
+                */
+
+                worst_cap += (worst_cap_distrib*worst_percent);
+                best_cap  += (best_cap_distrib*best_percent);
+                mid_cap   += (mid_cap_distrib*mid_percent);
+
+
+            }
         }
     }
 
+    std::cout << "Worst Cap: " << worst_cap << std::endl;
+    std::cout << "Best Cap: " << best_cap << std::endl;
+    std::cout << "Mid Cap: " << mid_cap << std::endl;
     
     std::cout << "Worst GL: " << (worst_cap - 5000) << std::endl;
 
     std::cout << "Best GL: " << (best_cap - 5000) << std::endl;
 
     std::cout << "Mid GL: " << (mid_cap - 5000) << std::endl;
+
+    std::cout << "TOT: " << tot << std::endl;
 
     std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
 
