@@ -351,7 +351,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                             /*if(minute_low_price < open_minute_open_price) break;*/
 
-                            current_vwap -= (current_vwap*0.05);
+                            current_vwap -= (current_vwap*0.03);
 
                             if((minute_low_price <= current_vwap) /*&& (minute_low_price >= open_minute_open_price)*/) {
 
@@ -368,7 +368,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                 float new_minute_indx = minute_indx+1;
 
                                 float breakpoint_low_price = minute_low_price;
-                                breakpoint_low_price -= (breakpoint_low_price*0.02);
+                                // breakpoint_low_price -= (breakpoint_low_price*0.02);
                                 while(new_minute_indx  < minute_count) {
 
                                     float new_minute_high_price = stock_spiked_json["results"][new_minute_indx]["h"];
@@ -422,7 +422,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                     else if(new_minute_low_price > breakpoint_low_price) {
 
                                         breakpoint_low_price = new_minute_low_price;
-                                        breakpoint_low_price -= (breakpoint_low_price*0.02);
+                                        // breakpoint_low_price -= (breakpoint_low_price*0.02);
                                     }
 
            
