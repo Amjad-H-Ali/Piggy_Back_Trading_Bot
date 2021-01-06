@@ -351,7 +351,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                             /*if(minute_low_price < open_minute_open_price) break;*/
 
-                            current_vwap -= (current_vwap*0.07);
+                            current_vwap -= (current_vwap*0.02);
 
                             if((minute_low_price <= current_vwap) /*&& (minute_low_price >= open_minute_open_price)*/) {
 
