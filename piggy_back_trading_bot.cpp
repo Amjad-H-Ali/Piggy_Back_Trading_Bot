@@ -14,6 +14,9 @@ using json = nlohmann::json;
 
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
+#define START_MONTH "01"
+#define START_DAY 	"04"
+#define START_YEAR  "2021"
 
 // Appends response to given output string
 static size_t write_data(const char* in, std::size_t size, std::size_t num, char* out) {
@@ -83,126 +86,115 @@ time_t get_time_in_ms(uint64_t month, uint64_t day, uint64_t year, uint64_t hour
 	return  mktime(tminfo)*1000;
 }
 
+struct Prev_Market_Data_T{
 
-// Returns a new vector of stocks that are green for the given minute interval.
-std::vector<std::string> filter_spike_tickers(const std::vector<std::string>& tickers, uint64_t ticker_indx, uint64_t  month, uint64_t day, uint64_t year) {
+	float price,
+		  volume;
 
-	std::vector<std::string> qualified_tickers;
-	std::string request, response;
-
-
-
-	for(const std::string& ticker : tickers) {
-
-		request = 	"https://api.polygon.io/v2/aggs/ticker/" + ticker + "/range/1/minute/" 
-
-				+  	std::to_string(get_time_in_ms(month, day, year, 8, 30, 0)) + "/" + std::to_string(get_time_in_ms(month, day, year, 8, 31 + ticker_indx, 0)) 
-			
-				+ 	"?unadjusted=false&sort=asc&limit=50000&apiKey=" STRINGIZE_VAL(APIKEYID); 
-
-		fulfill_request(request, response);
-
-		auto market_data_json = json::parse(response);
-
-		try{
-			if(market_data_json["results"][ticker_indx]["c"] > market_data_json["results"][ticker_indx]["o"]) {
-
-				qualified_tickers.emplace_back(ticker);
-			}
-		}
-		catch(nlohmann::detail::parse_error parse_error) {
-
-			std::cerr << "JSON parse error in filter_spike_tickers function: " << std::endl;
-		}
-		catch(nlohmann::detail::type_error type_error) {
-
-			std::cerr << "JSON type error in filter_spike_tickers function: " << std::endl;
-		}
-	}
-
-	return qualified_tickers;
-}
-
-
+	Prev_Market_Data_T(float Price, float Volume) 
+		:price(Price), volume(Volume) {}
+};
 
 int main(void) {
 
 #if defined (APIKEYID) &&  defined (APISECRETKEY)
 
-
-	// std::cout << (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()) << std::endl;
-
-	// uint64_t t = get_time_in_ms(11, 29, 2020, 1, 35, 0) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-
-	// std::this_thread::sleep_for(std::chrono::milliseconds(t));
-
-
-	// Request  stock data for previous open day
-	std::string request =  "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2020-12-24?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
+	// Request market data for previous open day
+	std::string request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/" START_YEAR "-" START_MONTH "-" START_DAY "?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
 
 	std::string response;
 
 	fulfill_request(request, response);
 
-	auto market_data_json = json::parse(response);
+	decltype(json::parse(response)) market_data_json;
 
-	std::map<std::string, float> prev_price_map;
+	// Attempt to parse response into json
+	while(true) {
 
-	std::vector<std::string> spike_tickers;
+		try {
 
-	// Get all stocks closing prices.
-	for(uint64_t ticker_indx = 0, ticker_count = market_data_json["resultsCount"]; ticker_indx < ticker_count; ++ticker_indx) {
+			market_data_json = json::parse(response);
 
-		std::string t = market_data_json["results"][ticker_indx]["T"];
+			break;
+		}
+		catch(nlohmann::detail::parse_error err) {
 
-		if( (t.size() > 10) || (static_cast<uint64_t>(market_data_json["results"][ticker_indx]["v"]) < 400000) || (static_cast<float>(market_data_json["results"][ticker_indx]["o"]) < 1)) continue;
+			std::cerr << "Part of response lost in transmission" << std::endl;
 
-		prev_price_map.emplace(t, market_data_json["results"][ticker_indx]["c"]);
-
+		}
 	}
 
 
-	// Request stock data for today
-	request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2020-12-28?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
+
+	// Insert previous market data, ticker, closing price and volume, into a map
+	std::map<std::string, Prev_Market_Data_T> prev_market_data_map;
+
+	for(uint64_t stock_indx = 0, stock_count = market_data_json["resultsCount"]; stock_indx < stock_count; ++stock_indx) {
+
+		// Ignore corrupt data
+		if(static_cast<std::string>(market_data_json["results"][stock_indx]["T"]).size() > 10) continue;
+
+		prev_market_data_map.emplace(
+
+			static_cast<std::string>(market_data_json["results"][stock_indx]["T"]),
+
+			Prev_Market_Data_T(
+
+				static_cast<float>(market_data_json["results"][stock_indx]["c"]), 
+
+				static_cast<float>(market_data_json["results"][stock_indx]["v"])
+			)
+			
+		);
+	}
+
+	// Put thread to sleep until next market open
+	uint64_t ms_till_open = get_time_in_ms(0, 6, 2021, 8, 30, 0) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
+
+	// Request current market data
+	request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2021-01-06?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
 
 	fulfill_request(request, response);
 
-	market_data_json = json::parse(response);
+	// Attempt to parse response into json
+	while(true) {
 
+		try {
 
-	// Search for all stocks that opened with a spike of at least 5 percent
-	for(uint64_t ticker_indx = 0, ticker_count = market_data_json["resultsCount"]; ticker_indx < ticker_count; ++ticker_indx) {
+			market_data_json = json::parse(response);
 
-		std::string t = market_data_json["results"][ticker_indx]["T"];
+			break;
+		}
+		catch(nlohmann::detail::parse_error err) {
 
-		std::map<std::string, float>::iterator it = prev_price_map.find(t);
-
-		// Ticker does not have a previous day closing price; It must be a new ticker.
-		if(it == prev_price_map.end()) continue;
-
-
-		float percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["o"]) - it->second)/it->second)*100;
-
-
-		if(percent_change > 5) {
-
-			spike_tickers.emplace_back(it->first);
+			std::cerr << "Part of response lost in transmission" << std::endl;
 
 		}
-
 	}
 
+	std::map<std::string, Prev_Market_Data_T>::iterator it_end = prev_market_data_map.end();
+	// If stock has a relative volume (from last trading day) spike of 500% or more, and has a spike in price of 5% or more, then trade stock
+	// when its price reaches a price 2% (or more) below the VWAP. Sell the stock if the price declines below the last low of the minute ticker.
+	for(uint64_t stock_indx = 0, stock_count = market_data_json["resultsCount"]; stock_indx < stock_count; ++stock_indx) {
 
-	// Phase 1: Is the first minute interval green.
-	std::vector<std::string> phase1_spike_tickers =  filter_spike_tickers(spike_tickers, 0, 12, 29, 2020);
+		std::map<std::string, Prev_Market_Data_T>::iterator it_prev_market = prev_market_data_map.find(static_cast<std::string>(market_data_json["results"][stock_indx]["T"]));
 
-	// Phase 2: Is the second minute interval green.
-	std::vector<std::string> phase2_spike_tickers =  filter_spike_tickers(phase1_spike_tickers, 1, 12, 29, 2020);
+		// Previous data not found
+		if(it_prev_market == it_end) continue;
 
-	// Phase 3: Is the third minute interval green.
-	std::vector<std::string> phase3_spike_tickers =  filter_spike_tickers(phase2_spike_tickers, 2, 12, 29, 2020);
+		// Compute percent change from previous day
+		float price_percent_change =  (static_cast<float>(market_data_json["results"][stock_indx]["o"]) - (it_prev_market->second).price)/(it_prev_market->second).price,
+
+   			  volume_percent_change = (static_cast<float>(market_data_json["results"][stock_indx]["v"]) - (it_prev_market->second).volume)/(it_prev_market->second).volume;
+
+		// Stock's price spiked 5% or more, volume spiked 500% or more, total day's volume of last trading day was 150k or more.
+		if((price_percent_change >= 0.05) && (volume_percent_change >= 5) && ((it_prev_market->second).volume >= 150000)) {
 
 
+		}
+	}
 
 
 
