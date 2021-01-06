@@ -185,22 +185,21 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                 decltype(json::parse(response)) market_data_json;
 
-                try {
+                while(true) {
 
-                    market_data_json = json::parse(response);
-                }
-                catch(nlohmann::detail::parse_error err) {
+                    try {
 
-                    std::cerr << "Part of response lost in transmission" << std::endl;
+                        market_data_json = json::parse(response);
 
-                    ++errors;
+                        break;
+                    }
+                    catch(nlohmann::detail::parse_error err) {
 
-                    --day;
-                    --percent_GL_indx;
-                    --percent_GL_indx_mo;
+                        std::cerr << "Part of response lost in transmission" << std::endl;
 
-                    continue;
+                        ++errors;
 
+                    }
                 }
 
 
@@ -243,24 +242,21 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 				fulfill_request(request, response);
 
 				
-				try {
+                while(true) {
 
-                    market_data_json = json::parse(response);
-                }
-                catch(nlohmann::detail::parse_error err) {
+                    try {
 
-                    std::cerr << "Part of response lost in transmission" << std::endl;
+                        market_data_json = json::parse(response);
+                        break;
+                    }
+                    catch(nlohmann::detail::parse_error err) {
 
-                    ++errors;
+                        std::cerr << "Part of response lost in transmission" << std::endl;
 
-                    --day;
-                    --percent_GL_indx;
-                    --percent_GL_indx_mo;
-
-                    continue;
+                        ++errors;
+                    }
 
                 }
-
 // std::cout << "Market was open? " << ((market_data_json["resultsCount"]==0) ? "False" : "True") << std::endl;
 
 
@@ -305,21 +301,22 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
 						decltype(json::parse(response)) stock_spiked_json;
 
-						try {
+                        while(true) {
 
-							stock_spiked_json = json::parse(response);
-						}
-						catch(nlohmann::detail::parse_error err) {
+                            try {
 
-							std::cerr << "Part of response lost in transmission" << std::endl;
+                                stock_spiked_json = json::parse(response);
+                                break;
+                            }
+                            catch(nlohmann::detail::parse_error err) {
 
-							++errors;
+                                std::cerr << "Part of response lost in transmission" << std::endl;
 
-                            --ticker_indx;
+                                ++errors;
 
-							continue;
-
-						}
+                            }
+                        }
+                        
                         if(stock_spiked_json["resultsCount"] <= 0) continue;
                         // if(stock_spiked_json["results"][0]["c"] <= stock_spiked_json["results"][0]["o"]) continue;
 
