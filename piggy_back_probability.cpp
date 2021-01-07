@@ -1,4 +1,4 @@
-/* out16.txt */
+/* out17.txt */
 
 #include <iostream>
 #include <curl/curl.h>
@@ -398,14 +398,14 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                                         tot += (mid_case_sell_price - mid_case_buy_price);
 
-                                        std::cout << month+1 << "-" << day << "-" << year << " Sold " << ticker << " @ " << mid_case_sell_price << std::endl << std::endl;
+                                        
 
 
                                         float worst_case_percent_GL = ((worst_case_sell_price - worst_case_buy_price)/worst_case_buy_price);
                                         float best_case_percent_GL = ((best_case_sell_price - best_case_buy_price)/best_case_buy_price);
                                         float mid_case_percent_GL = ((mid_case_sell_price - mid_case_buy_price)/mid_case_buy_price);
                                         
-                                        
+                                        std::cout << month+1 << "-" << day << "-" << year << " Sold " << ticker << " @ " << mid_case_sell_price << " P: %" << mid_case_percent_GL << std::endl << std::endl;
 
                                         percent_GL_vecs[percent_GL_indx][ticker].emplace_back(worst_case_percent_GL);
                                         percent_GL_vecs[percent_GL_indx][ticker].emplace_back(best_case_percent_GL);
@@ -530,15 +530,17 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                 uint64_t opportunities = percent_GL_vecs_mo[i].size();
 
+                if(opportunities == 0) continue;
+
                 std::cout << "DAY: " << dy++ << std::endl;
 
                 if(dy >= months[month]) dy = 1;
 
                 std::cout << "Opportunities: " << opportunities << std::endl;
 
-                float worst_cap_distrib = worst_cap_mo/opportunities;
-                float best_cap_distrib  = best_cap_mo/opportunities;
-                float mid_cap_distrib   = mid_cap_mo/opportunities;
+                float worst_cap_distrib = static_cast<float>(worst_cap_mo)/opportunities;
+                float best_cap_distrib  = static_cast<float>(best_cap_mo)/opportunities;
+                float mid_cap_distrib   = static_cast<float>(mid_cap_mo)/opportunities;
 
                 for(auto& vec_pair : percent_GL_vecs_mo[i]) {
 
@@ -547,6 +549,11 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                     auto& vec = vec_pair.second;
 
                     std::cout << "Trading " << ticker << " " << vec.size()/3 << " times" << std::endl;
+
+
+                    float worst_cap_distrib_indiv = worst_cap_distrib;
+                    float best_cap_distrib_indiv  = best_cap_distrib; 
+                    float mid_cap_distrib_indiv   = mid_cap_distrib;
 
                     for(uint64_t j = 0, len = vec.size(); j+2 < len; j+=3) {
 
@@ -564,12 +571,26 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                         */
 
-                        worst_cap_mo += (worst_cap_distrib*worst_percent);
-                        best_cap_mo  += (best_cap_distrib*best_percent);
-                        mid_cap_mo   += (mid_cap_distrib*mid_percent);
+                       std::cout << "In Cash: " << mid_cap_distrib_indiv  << std::endl << std::endl;
+
+                        worst_cap_distrib_indiv += (worst_cap_distrib_indiv*worst_percent);
+                        best_cap_distrib_indiv  += (best_cap_distrib_indiv*best_percent);
+                        mid_cap_distrib_indiv   += (mid_cap_distrib_indiv*mid_percent);
+
+                        std::cout << "Out Cash: " << mid_cap_distrib_indiv  << std::endl << std::endl;
 
 
                     }
+
+                    float worst_pl = (worst_cap_distrib_indiv - worst_cap_distrib);
+                    float best_pl  = (best_cap_distrib_indiv - best_cap_distrib);
+                    float mid_pl   = (mid_cap_distrib_indiv - mid_cap_distrib);
+
+                    worst_cap_mo += (worst_pl);
+                    best_cap_mo  += (best_pl);
+                    mid_cap_mo   += (mid_pl);
+
+
                 }
 
                 std::cout << "Day's End Worst Cap: " << worst_cap_mo << std::endl;
@@ -618,11 +639,13 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
         uint64_t opportunities = percent_GL_vecs[i].size();
 
+        if(opportunities == 0) continue;
+
         // std::cout << "Opportunities: " << opportunities << std::endl;
 
-        float worst_cap_distrib = worst_cap/opportunities;
-        float best_cap_distrib  = best_cap/opportunities;
-        float mid_cap_distrib   = mid_cap/opportunities;
+        float worst_cap_distrib = static_cast<float>(worst_cap)/opportunities;
+        float best_cap_distrib  = static_cast<float>(best_cap)/opportunities;
+        float mid_cap_distrib   = static_cast<float>(mid_cap)/opportunities;
 
         for(auto& vec_pair : percent_GL_vecs[i]) {
 
@@ -632,6 +655,10 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
             auto& vec = vec_pair.second;
 
             // std::cout << "Trading " << ticker << " " << vec.size()/3 << " times" << std::endl;
+
+            float worst_cap_distrib_indiv = worst_cap_distrib;
+            float best_cap_distrib_indiv  = best_cap_distrib; 
+            float mid_cap_distrib_indiv   = mid_cap_distrib;
 
             for(uint64_t j = 0, len = vec.size(); j+2 < len; j+=3) {
 
@@ -647,12 +674,21 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                 std::cout << "Mid % " << mid_percent << std::endl;
                 */
 
-                worst_cap += (worst_cap_distrib*worst_percent);
-                best_cap  += (best_cap_distrib*best_percent);
-                mid_cap   += (mid_cap_distrib*mid_percent);
-
+                worst_cap_distrib_indiv += (worst_cap_distrib_indiv*worst_percent);
+                best_cap_distrib_indiv  += (best_cap_distrib_indiv*best_percent);
+                mid_cap_distrib_indiv   += (mid_cap_distrib_indiv*mid_percent);
 
             }
+
+            float worst_pl= (worst_cap_distrib_indiv - worst_cap_distrib);
+            float best_pl = (best_cap_distrib_indiv - best_cap_distrib);
+            float mid_pl  = (mid_cap_distrib_indiv - mid_cap_distrib);
+
+            worst_cap += (worst_pl);
+            best_cap  += (best_pl);
+            mid_cap   += (mid_pl);
+
+
         }
     }
 
