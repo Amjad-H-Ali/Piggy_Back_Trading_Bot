@@ -1,4 +1,4 @@
-/* out15.txt */
+/* out16.txt */
 
 #include <iostream>
 #include <curl/curl.h>
@@ -384,6 +384,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                                     float new_minute_high_price = stock_spiked_json["results"][new_minute_indx]["h"];
                                     float new_minute_low_price = stock_spiked_json["results"][new_minute_indx]["l"];
+                                    float new_minute_open_price = stock_spiked_json["results"][new_minute_indx]["o"];
 
                                     float prev_minute_close_price = stock_spiked_json["results"][new_minute_indx-1]["c"];
                                     
@@ -435,7 +436,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                     else if(new_minute_low_price > breakpoint_low_price) {
 
                                         // breakpoint_low_price = new_minute_low_price;
-                                        breakpoint_low_price = prev_minute_close_price;
+                                        breakpoint_low_price = new_minute_open_price;
                                         breakpoint_low_price -= (breakpoint_low_price*0.005);
                                     }
 
