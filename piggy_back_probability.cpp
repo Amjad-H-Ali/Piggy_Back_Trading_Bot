@@ -134,6 +134,8 @@ int main(void) {
 
 	float losses = 0;
 
+    uint64_t max_qualified = 0;
+
 	uint64_t errors = 0;
 
     uint64_t percent_GL_indx = 0;
@@ -162,6 +164,8 @@ int main(void) {
 
 			// Days range from [1,30], [1,31], [1,28], or [1,29] depending on month and if leap-year or not.
 			for(uint64_t day = 1, days_in_month = months[month]; day <= days_in_month; ++day, ++percent_GL_indx, ++percent_GL_indx_mo) {
+
+                uint64_t day_qualified = 0;
 
 
 std::cout << month+1 << "/" << day << "/" << year << std::endl;				
@@ -272,6 +276,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 				// Check the percent change of all stocks from their previous closing price
 				for(uint64_t ticker_indx = 0, ticker_count = market_data_json["resultsCount"]; ticker_indx < ticker_count; ++ticker_indx) {
 
+
 					std::map<std::string, Data>::iterator it = prev_day_closing_price_map.find(market_data_json["results"][ticker_indx]["T"]);
 
 					// Ticker does not have a previous day closing price; It must be a new ticker.
@@ -288,7 +293,9 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                     float volume_percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["v"]) - previous_day_volume)/previous_day_volume)*100;
 
-					if((price_percent_change >= 5) && (volume_percent_change >= 500) && (previous_day_volume > 150000)) {			
+					if((price_percent_change >= 5) && (volume_percent_change >= 500) && (previous_day_volume > 150000)) {	
+
+                        ++day_qualified;		
 
 						request = 	"https://api.polygon.io/v2/aggs/ticker/" + it->first + "/range/1/minute/" 
 
@@ -422,7 +429,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                                         // breakpoint_low_price = new_minute_low_price;
                                         breakpoint_low_price = prev_minute_close_price;
-                                        breakpoint_low_price -= (breakpoint_low_price*0.01);
+                                        breakpoint_low_price -= (breakpoint_low_price*0.005);
                                     }
 
            
@@ -488,6 +495,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 					
 				
 				}
+
+                max_qualified = std::max(max_qualified, day_qualified);
 
 				prev_month = month;
 
@@ -650,6 +659,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
     std::cout << "Mid GL: " << (mid_cap - 5000) << std::endl;
 
     std::cout << "TOT: " << tot << std::endl;
+
+    std::cout << "MAX QUALIFIED: " << max_qualified << std::endl;
 
     std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
 
