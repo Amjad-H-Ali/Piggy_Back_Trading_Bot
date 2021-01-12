@@ -1,4 +1,4 @@
-/* out17.txt */
+/* out18.txt */
 
 #include <iostream>
 #include <curl/curl.h>
@@ -380,6 +380,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                 // float breakpoint_low_price = minute_low_price;
                                 float breakpoint_low_price = mid_case_buy_price;
                                 breakpoint_low_price -= (breakpoint_low_price*0.005);
+                                float buy_price = breakpoint_low_price;
                                 while(new_minute_indx  < minute_count) {
 
                                     float new_minute_high_price = stock_spiked_json["results"][new_minute_indx]["h"];
@@ -438,6 +439,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                         // breakpoint_low_price = new_minute_low_price;
                                         breakpoint_low_price = new_minute_open_price;
                                         breakpoint_low_price -= (breakpoint_low_price*0.005);
+
+                                        breakpoint_low_price = std::max(breakpoint_low_price, buy_price);
                                     }
 
            
