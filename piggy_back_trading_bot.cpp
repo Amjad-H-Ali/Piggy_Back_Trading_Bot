@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <cpprest/ws_client.h>
+
 
 // For convenience
 using json = nlohmann::json;
@@ -174,6 +176,8 @@ int main(void) {
 		}
 	}
 
+	std::vector<std::string> watchlist;
+
 	std::map<std::string, Prev_Market_Data_T>::iterator it_end = prev_market_data_map.end();
 	// If stock has a relative volume (from last trading day) spike of 500% or more, and has a spike in price of 5% or more, then trade stock
 	// when its price reaches a price 2% (or more) below the VWAP. Sell the stock if the price declines below the last low of the minute ticker.
@@ -192,10 +196,11 @@ int main(void) {
 		// Stock's price spiked 5% or more, volume spiked 500% or more, total day's volume of last trading day was 150k or more.
 		if((price_percent_change >= 0.05) && (volume_percent_change >= 5) && ((it_prev_market->second).volume >= 150000)) {
 
-
+			watchlist.emplace_back(static_cast<std::string>(market_data_json["results"][stock_indx]["T"]));
 		}
 	}
 
+	web::websockets::client::websocket_callback_client client;
 
 
 #else   
