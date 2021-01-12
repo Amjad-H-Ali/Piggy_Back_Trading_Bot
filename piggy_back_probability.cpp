@@ -1,4 +1,4 @@
-/* out18.txt */
+/* out19.txt */
 
 #include <iostream>
 #include <curl/curl.h>
@@ -437,7 +437,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
                                     else if(new_minute_low_price > breakpoint_low_price) {
 
                                         // breakpoint_low_price = new_minute_low_price;
-                                        breakpoint_low_price = new_minute_open_price;
+                                        breakpoint_low_price = new_minute_high_price;
                                         breakpoint_low_price -= (breakpoint_low_price*0.005);
 
                                         breakpoint_low_price = std::max(breakpoint_low_price, buy_price);
