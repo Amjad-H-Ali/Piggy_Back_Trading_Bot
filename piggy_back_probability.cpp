@@ -1,4 +1,4 @@
-/* out19.txt */
+/* out20.txt */
 
 #include <iostream>
 #include <curl/curl.h>
@@ -363,7 +363,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                                 best_case_buy_price  = minute_low_price;
 
-                                mid_case_buy_price   = /*current_vwap*/ minute_low_price + ((minute_high_price-minute_low_price)/2);
+                                mid_case_buy_price   = /*current_vwap*/ minute_low_price + (std::abs(minute_high_price-minute_low_price)/2);
 
                                 worst_case_buy_price = minute_high_price;
 
@@ -395,7 +395,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                                         worst_case_sell_price = new_minute_low_price;
                                         best_case_sell_price  = breakpoint_low_price;
-                                        mid_case_sell_price   = new_minute_low_price + ((breakpoint_low_price-new_minute_low_price)/2);
+                                        mid_case_sell_price   = new_minute_low_price + (std::abs(breakpoint_low_price-new_minute_low_price)/2);
 
                                         tot += (mid_case_sell_price - mid_case_buy_price);
 
@@ -456,7 +456,7 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                                     worst_case_sell_price = new_minute_low_price;
                                     best_case_sell_price  = new_minute_high_price;
-                                    mid_case_sell_price   = (new_minute_low_price + (new_minute_high_price-new_minute_low_price)/2);
+                                    mid_case_sell_price   = (new_minute_low_price + std::abs(new_minute_high_price-new_minute_low_price)/2);
 
                                     tot += (mid_case_sell_price - mid_case_buy_price);
 
