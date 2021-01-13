@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
-#include <cpprest/ws_client.h>
+
 
 
 // For convenience
@@ -29,6 +29,78 @@ static size_t write_data(const char* in, std::size_t size, std::size_t num, char
 	return size * num;
 }
 
+uint64_t fulfill_post_request(const std::string& request, std::string& response, const std::string& parameters) {
+
+	// Set HTTP header
+	static CURL *curl = curl_easy_init();
+
+	curl_easy_setopt(curl, CURLOPT_URL, request.c_str());
+	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT,20);
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+    // Set keys needed for API to authenticate 
+	struct curl_slist *keys = NULL;
+	keys = curl_slist_append(keys, "APCA-API-KEY-ID: " STRINGIZE_VAL(APIKEYID));
+	keys = curl_slist_append(keys, "APCA-API-SECRET-KEY: " STRINGIZE_VAL(APISECRETKEY));
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, keys);
+
+	// The body or parameters of the Post request
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, parameters.c_str());
+
+	// Response information
+	uint64_t http_status_code = 0;
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+    
+	response = "";
+
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+	curl_easy_perform(curl);
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status_code);
+
+	curl_easy_cleanup(curl);
+
+	return http_status_code;
+}
+
+uint64_t fulfill_delete_request(const std::string& request, std::string& response, const std::string& parameters) {
+
+	// Set HTTP header
+	static CURL *curl = curl_easy_init();
+
+	curl_easy_setopt(curl, CURLOPT_URL, (request+parameters).c_str());
+	curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT,20);
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+    // Set keys needed for API to authenticate 
+	struct curl_slist *keys = NULL;
+	keys = curl_slist_append(keys, "APCA-API-KEY-ID: " STRINGIZE_VAL(APIKEYID));
+	keys = curl_slist_append(keys, "APCA-API-SECRET-KEY: " STRINGIZE_VAL(APISECRETKEY));
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, keys);
+
+	// The body or parameters of the Post request
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, parameters.c_str());
+
+	// Response information
+	uint64_t http_status_code = 0;
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+    
+	response = "";
+
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+	curl_easy_perform(curl);
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status_code);
+
+	curl_easy_cleanup(curl);
+
+	return http_status_code;
+}
+
+
 // Given a string request, does an HTTP request to a server and stores
 // response in given string response object.
 uint64_t fulfill_request(const std::string& request, std::string& response) {
@@ -37,7 +109,6 @@ uint64_t fulfill_request(const std::string& request, std::string& response) {
 	static CURL *curl = curl_easy_init();
 
 	curl_easy_setopt(curl, CURLOPT_URL, request.c_str());
-
 	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT,20);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -58,6 +129,8 @@ uint64_t fulfill_request(const std::string& request, std::string& response) {
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 	curl_easy_perform(curl);
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status_code);
+
+	curl_easy_cleanup(curl);
 
 	return http_status_code;
 }
@@ -151,7 +224,7 @@ int main(void) {
 	}
 
 	// Put thread to sleep until next market open
-	uint64_t ms_till_open = get_time_in_ms(0, 6, 2021, 8, 30, 0) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+	uint64_t ms_till_open = get_time_in_ms(0, 6, 2021, 8, 30, 5) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
 
@@ -200,7 +273,69 @@ int main(void) {
 		}
 	}
 
-	web::websockets::client::websocket_callback_client client;
+	// Distribute even amount of capital for each stock in watchlist
+
+		// std::min(50k/watchlist.size(), 2500)
+
+	// Create snap shot request string with all stocks in watchlist
+
+	// Insert all stocks in watchlist in all maps with ticker and bool set to false
+		
+	// Wait till 8:31:05 AM
+
+	// While true:
+
+		// Request positions
+
+		// For each position:
+
+			// Set open_position_map[position.symbol] = true
+
+			// Set buy_order_map[position.symbol] = false
+
+
+		// Request snap shot of stocks in watchlist
+
+		// For each stock in Response object:
+
+			// if (open_position_map[position.symbol] == false) and (buy_order_map[position.symbol] == false):
+
+				// Calculate 2% below VWAP 
+
+				// Divide capital buy that price
+
+				// Sumbit a limit order for 2% below vwap with correct qty
+
+				// Set sell_order_map[position.symbol] = false
+
+				// Set buy_order_map[position.symbol] = true
+
+
+		// Request positions
+
+		// For each position:
+		
+			// If sell_order_map[position.symbol] == false:
+
+				// Submit a trailing stop order with a trail_percent of 0.5% for the correct qty
+
+				// Set sell_order_map[position.symbol] = true
+
+				// Set buy_order_map[position.symbol] = false
+
+		
+		// Set all tickers in open_position_map to false
+
+		// if now >= next_minute:
+
+			// Cancel all open buy orders
+
+			// Set all tickers in buy_order_map to false
+
+			// next_minute = now + 1000 (1min)
+
+
+
 
 
 #else   
