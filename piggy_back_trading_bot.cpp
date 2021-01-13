@@ -19,6 +19,7 @@ using json = nlohmann::json;
 #define START_MONTH "01"
 #define START_DAY 	"11"
 #define START_YEAR  "2021"
+#define NOW (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
 
 // Appends response to given output string
 static size_t write_data(const char* in, std::size_t size, std::size_t num, char* out) {
@@ -235,7 +236,7 @@ int main(void) {
 	}
 
 	// Put thread to sleep until next market open
-	// uint64_t ms_till_open = get_time_in_ms(0, 13, 2021, 8, 30, 5) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+	// uint64_t ms_till_open = get_time_in_ms(0, 13, 2021, 8, 30, 5) - NOW;
 
 	// std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
 
@@ -346,14 +347,14 @@ int main(void) {
 
 
 	// Put thread to sleep until next minute
-	// int64_t ms_till_start = get_time_in_ms(0, 13, 2021, 8, 31, 5) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+	// int64_t ms_till_start = get_time_in_ms(0, 13, 2021, 8, 31, 5) - NOW;
 
 	// if(ms_till_start > 0) {
 
 	// 	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_start));
 	// }
 
-
+	uint64_t last_minute = NOW;
 	while(true) {
 
 		request = "https://paper-api.alpaca.markets/v2/positions";
@@ -527,11 +528,71 @@ int main(void) {
 			open_position_pair.second = false;
 		}
 
-		
+
+		if((NOW - last_minute) >= 60) {
+
+			request = "https://paper-api.alpaca.markets/v2/orders";
+
+			fulfill_get_request(request, response);
+
+			while(1) {
+
+				try {
+
+					market_data_json = json::parse(response);
+
+					break;
+
+				}
+				catch(nlohmann::detail::parse_error err) {
+
+					std::cerr << "Parse error while getting list of orders. Could not update minute" << std::endl;
+
+				}
+				catch(nlohmann::detail::type_error err) {
+
+					std::cerr << "Type error while getting list of orders. Could not update minute" << std::endl;
+
+				}
+			}
+
+			request = "https://paper-api.alpaca.markets/v2/orders";
+			uint64_t order_indx = 0;
+			while(market_data_json[order_indx] != nullptr) {
+
+				std::string order_id = "/" + static_cast<std::string>(market_data_json[order_indx]["id"]);
+
+				fulfill_delete_request(request, response, order_id);
+
+				++order_indx;
+			}
+
+			for(auto& buy_order_pair: buy_order_map) {
+				buy_order_pair.second = false;
+			}
+
+			last_minute = NOW;
+
+		}
 
 	}
 	
-	
+
+#else   
+    std::cerr << "API-KEY-ID and/or API-SECRET-KEY are/is undefined."  << std::endl;
+    std::cerr << "Usage: >> $ make API-KEY-ID={YOUR_API_KEY_ID} API-SECRET-KEY={YOUR_API_SECRET_KEY}"  << std::endl;
+    return 1;
+#endif
+
+}
+
+
+
+
+
+
+
+
 
 	// Distribute even amount of capital for each stock in watchlist
 
@@ -593,15 +654,3 @@ int main(void) {
 			// Set all tickers in buy_order_map to false
 
 			// next_minute = now + 1000 (1min)
-
-
-
-
-
-#else   
-    std::cerr << "API-KEY-ID and/or API-SECRET-KEY are/is undefined."  << std::endl;
-    std::cerr << "Usage: >> $ make API-KEY-ID={YOUR_API_KEY_ID} API-SECRET-KEY={YOUR_API_SECRET_KEY}"  << std::endl;
-    return 1;
-#endif
-
-}
