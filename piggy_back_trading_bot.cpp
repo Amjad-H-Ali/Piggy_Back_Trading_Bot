@@ -17,7 +17,7 @@ using json = nlohmann::json;
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
 #define START_MONTH "01"
-#define START_DAY 	"04"
+#define START_DAY 	"11"
 #define START_YEAR  "2021"
 
 // Appends response to given output string
@@ -59,7 +59,7 @@ uint64_t fulfill_post_request(const std::string& request, std::string& response,
 	curl_easy_perform(curl);
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status_code);
 
-	curl_easy_cleanup(curl);
+	// curl_easy_cleanup(curl);
 
 	return http_status_code;
 }
@@ -95,7 +95,7 @@ uint64_t fulfill_delete_request(const std::string& request, std::string& respons
 	curl_easy_perform(curl);
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status_code);
 
-	curl_easy_cleanup(curl);
+	// curl_easy_cleanup(curl);
 
 	return http_status_code;
 }
@@ -103,7 +103,7 @@ uint64_t fulfill_delete_request(const std::string& request, std::string& respons
 
 // Given a string request, does an HTTP request to a server and stores
 // response in given string response object.
-uint64_t fulfill_request(const std::string& request, std::string& response) {
+uint64_t fulfill_get_request(const std::string& request, std::string& response) {
 
 	// Set HTTP header
 	static CURL *curl = curl_easy_init();
@@ -130,7 +130,7 @@ uint64_t fulfill_request(const std::string& request, std::string& response) {
 	curl_easy_perform(curl);
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status_code);
 
-	curl_easy_cleanup(curl);
+	// curl_easy_cleanup(curl);
 
 	return http_status_code;
 }
@@ -179,9 +179,12 @@ int main(void) {
 
 	std::string response;
 
-	fulfill_request(request, response);
+	fulfill_get_request(request, response);
 
 	decltype(json::parse(response)) market_data_json;
+
+
+	
 
 	// Attempt to parse response into json
 	while(true) {
@@ -194,10 +197,18 @@ int main(void) {
 		}
 		catch(nlohmann::detail::parse_error err) {
 
-			std::cerr << "Part of response lost in transmission" << std::endl;
+			std::cerr << "Parse error parsing grouped data for previous open day" << std::endl;
 
 		}
+		catch(nlohmann::detail::type_error err) {
+
+			std::cerr << "Type error parsing grouped data for previous open day" << std::endl;
+
+			break;
+		}
 	}
+
+	
 
 
 
@@ -224,15 +235,16 @@ int main(void) {
 	}
 
 	// Put thread to sleep until next market open
-	uint64_t ms_till_open = get_time_in_ms(0, 6, 2021, 8, 30, 5) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+	// uint64_t ms_till_open = get_time_in_ms(0, 13, 2021, 8, 30, 5) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
+	// std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
 
 	// Request current market data
-	request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2021-01-06?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
+	request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2021-01-12?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
 
-	fulfill_request(request, response);
+	fulfill_get_request(request, response);
 
+	
 	// Attempt to parse response into json
 	while(true) {
 
@@ -244,10 +256,18 @@ int main(void) {
 		}
 		catch(nlohmann::detail::parse_error err) {
 
-			std::cerr << "Part of response lost in transmission" << std::endl;
+			std::cerr << "Parse error parsing grouped data for current open day" << std::endl;
 
 		}
+		catch(nlohmann::detail::type_error err) {
+
+			std::cerr << "Type error parsing grouped data for current open day" << std::endl;
+
+			break;
+		}
 	}
+
+	
 
 	std::vector<std::string> watchlist;
 
@@ -272,6 +292,246 @@ int main(void) {
 			watchlist.emplace_back(static_cast<std::string>(market_data_json["results"][stock_indx]["T"]));
 		}
 	}
+
+
+
+
+	request = "https://paper-api.alpaca.markets/v2/account";
+
+	fulfill_get_request(request, response);
+
+	
+	// Attempt to parse response into json
+	while(true) {
+
+		try {
+
+			market_data_json = json::parse(response);
+
+			break;
+		}
+		catch(nlohmann::detail::parse_error err) {
+
+			std::cerr << "Parse error while parsing cash" << std::endl;
+
+		}
+		catch(nlohmann::detail::type_error err) {
+
+			std::cerr << "Type error while parsing cash" << std::endl;
+
+		}
+	}
+
+	
+
+	// if watchlist.size() == 0, sleep till next day
+
+
+	float capital_distribution = std::min(std::stof(static_cast<std::string>(market_data_json["cash"]))/watchlist.size(), static_cast<float>(2500));
+	std::map<std::string, bool> open_position_map, buy_order_map, sell_order_map;
+
+	std::string watchlist_tickers = "";
+
+	for(const std::string& ticker : watchlist) {
+
+		watchlist_tickers += (ticker + ",");
+
+		open_position_map[ticker] = false, buy_order_map[ticker] = false, sell_order_map[ticker] = false;
+	}
+
+	// Delete last comma
+	watchlist_tickers.erase(watchlist_tickers.end()-1);
+
+	
+
+
+	// Put thread to sleep until next minute
+	// int64_t ms_till_start = get_time_in_ms(0, 13, 2021, 8, 31, 5) - (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+
+	// if(ms_till_start > 0) {
+
+	// 	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_start));
+	// }
+
+
+	while(true) {
+
+		request = "https://paper-api.alpaca.markets/v2/positions";
+		fulfill_get_request(request, response);
+
+		// Attempt to parse response into json
+		while(true) {
+
+			try {
+
+				market_data_json = json::parse(response);
+
+				break;
+			}
+			catch(nlohmann::detail::parse_error err) {
+
+				std::cerr << "Parse error while parsing positions" << std::endl;
+
+			}
+			catch(nlohmann::detail::type_error err) {
+
+				std::cerr << "Type error while parsing positions" << std::endl;
+
+			}
+		}
+
+		uint64_t position_indx = 0;
+		while(market_data_json[position_indx] != nullptr) {
+
+			std::string ticker = market_data_json[position_indx]["symbol"];
+
+			open_position_map[ticker] = true;
+			buy_order_map[ticker]     = false;
+			
+			++position_indx;
+		}
+
+
+		request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
+
+
+		fulfill_get_request(request, response);
+
+
+		// Attempt to parse response into json
+		while(true) {
+
+			try {
+
+				market_data_json = json::parse(response);
+
+				break;
+			}
+			catch(nlohmann::detail::parse_error err) {
+
+				std::cerr << "Parse error while parsing snap shot of all stocks" << std::endl;
+
+			}
+			catch(nlohmann::detail::type_error err) {
+
+				std::cerr << "Type error while parsing snap shot of all stocks" << std::endl;
+
+			}
+		}
+
+
+
+		for(uint64_t stock_indx = 0, stock_count = market_data_json["count"]; stock_indx < stock_count; ++stock_indx) {
+
+			std::string ticker = market_data_json["tickers"][stock_indx]["ticker"];
+
+			if(!open_position_map[ticker] && !buy_order_map[ticker]) {
+
+				
+				float limit_price = static_cast<float>(market_data_json["tickers"]["min"]["vw"])*static_cast<float>(0.98);
+				uint64_t qty = capital_distribution/limit_price;
+				request = "https://paper-api.alpaca.markets/v2/orders";
+
+				decltype(json::parse(response)) param_json;
+
+				param_json["side"]        		= "buy";
+				param_json["symbol"]      		= ticker;
+				param_json["type"]   	  		= "limit";
+				param_json["limit_price"] 		= limit_price;
+				param_json["qty"]         		= qty;
+				param_json["time_in_force"]     = "ioc";
+
+				uint64_t status_code = fulfill_post_request(request, response, param_json.dump());
+
+				while((status_code == 403) && ((qty/=2) >= 1)) {
+
+					std::cerr << "Insuffucient Buying Power. Decreasing qty" << std::endl;
+
+					param_json["qty"] = qty;
+
+					status_code = fulfill_post_request(request, response, param_json.dump());
+				}
+
+				if(status_code != 200) {
+					std::cerr << "Non OK status when submitting buy order for " << ticker << ". Status was: " << status_code << std::endl;
+
+					continue;
+				}
+
+				sell_order_map[ticker]  = false;
+				buy_order_map[ticker]   = true;
+	
+			}
+		}
+
+		request = "https://paper-api.alpaca.markets/v2/positions";
+		fulfill_get_request(request, response);
+
+		// Attempt to parse response into json
+		while(true) {
+
+			try {
+
+				market_data_json = json::parse(response);
+
+				break;
+			}
+			catch(nlohmann::detail::parse_error err) {
+
+				std::cerr << "Parse error while parsing positions" << std::endl;
+
+			}
+			catch(nlohmann::detail::type_error err) {
+
+				std::cerr << "Type error while parsing positions" << std::endl;
+
+			}
+		}
+
+
+		uint64_t position_indx2 = 0;
+		while(market_data_json[position_indx2] != nullptr) {
+
+			std::string ticker = market_data_json[position_indx2]["symbol"];
+
+			if(sell_order_map[ticker] == false) {
+
+			
+				decltype(json::parse(response)) param_json;
+
+				param_json["side"]        		= "sell";
+				param_json["symbol"]      		= ticker;
+				param_json["type"]   	  		= "trailing_stop";
+				param_json["trail_percent"]     = "0.5";
+				param_json["qty"]         		= market_data_json[position_indx2]["qty"];
+				param_json["time_in_force"]     = "gtc";
+
+				uint64_t status_code = fulfill_post_request(request, response, param_json.dump());
+
+				if(status_code != 200) {
+					std::cerr << "Non OK status when submitting sell order for " << ticker << ". Status was: " << status_code << std::endl;
+				}
+
+				sell_order_map[ticker] = true;
+				buy_order_map[ticker]  = false;
+				
+			}
+
+
+			
+			++position_indx2;
+		}
+
+
+		for(auto& open_position_pair: open_position_map) {
+			open_position_pair.second = false;
+		}
+
+		
+
+	}
+	
+	
 
 	// Distribute even amount of capital for each stock in watchlist
 
