@@ -17,9 +17,13 @@ using json = nlohmann::json;
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
 #define START_MONTH "01"
-#define START_DAY 	"13"
+#define START_DAY 	"12"
 #define START_YEAR  "2021"
 #define NOW (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
+#define HOUR 9
+#define MIN 41
+#define NEXT_HOUR 9
+#define NEXT_MINUTE 42
 
 // Appends response to given output string
 static size_t write_data(const char* in, std::size_t size, std::size_t num, char* out) {
@@ -210,7 +214,7 @@ int main(void) {
 	}
 
 	
-
+std::cout << "01" << std::endl;
 
 
 	// Insert previous market data, ticker, closing price and volume, into a map
@@ -234,9 +238,10 @@ int main(void) {
 			
 		);
 	}
+std::cout << "02" << std::endl;
 
 	// Put thread to sleep until next market open
-	uint64_t ms_till_open = get_time_in_ms(0, 13, 2021, 8, 30, 5) - NOW;
+	uint64_t ms_till_open = get_time_in_ms(0, 13, 2021, HOUR, MIN, 5) - NOW;
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
 
@@ -268,7 +273,7 @@ int main(void) {
 		}
 	}
 
-	
+	std::cout << "03" << std::endl;
 
 	std::vector<std::string> watchlist;
 
@@ -295,7 +300,7 @@ int main(void) {
 	}
 
 
-
+std::cout << "04" << std::endl;
 
 	request = "https://paper-api.alpaca.markets/v2/account";
 
@@ -323,15 +328,15 @@ int main(void) {
 		}
 	}
 
-	
+	std::cout << "05" << std::endl;
 
 	if (watchlist.size() == 0) {
 
-		int64_t ms_till_tomorrow = get_time_in_ms(0, 14, 2021, 8, 31, 5) - NOW;
+		int64_t ms_till_tomorrow = get_time_in_ms(0, 14, 2021, 8, 30, 5) - NOW;
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_tomorrow));
 	}
-	
+	std::cout << "06" << std::endl;
 
 
 	float capital_distribution = std::min(std::stof(static_cast<std::string>(market_data_json["cash"]))/watchlist.size(), std::stof(static_cast<std::string>(market_data_json["cash"]))*static_cast<float>(0.05));
@@ -350,22 +355,28 @@ int main(void) {
 	watchlist_tickers.erase(watchlist_tickers.end()-1);
 
 	
-
+std::cout << "07" << std::endl;
 
 	// Put thread to sleep until next minute
-	int64_t ms_till_start = get_time_in_ms(0, 13, 2021, 8, 31, 5) - NOW;
+	int64_t ms_till_start = get_time_in_ms(0, 13, 2021, NEXT_HOUR, NEXT_MINUTE, 5) - NOW;
 
 	if(ms_till_start > 0) {
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_start));
 	}
 
-	uint64_t last_minute = NOW;
+	std::cout << "08" << std::endl;
+
+	uint64_t last_minute = NOW, request_limit = 0;
+
 	while(true) {
+
+
 
 
 		request = "https://paper-api.alpaca.markets/v2/positions";
 		fulfill_get_request(request, response);
+		++request_limit;
 
 		// Attempt to parse response into json
 		while(true) {
@@ -388,6 +399,7 @@ int main(void) {
 			}
 		}
 
+std::cout << "09" << std::endl;
 		uint64_t position_indx = 0;
 		while(market_data_json[position_indx] != nullptr) {
 
@@ -404,6 +416,7 @@ int main(void) {
 
 
 		fulfill_get_request(request, response);
+		++request_limit;
 
 
 		// Attempt to parse response into json
@@ -427,29 +440,39 @@ int main(void) {
 			}
 		}
 
-
+std::cout << "10" << std::endl;
 
 		for(uint64_t stock_indx = 0, stock_count = market_data_json["count"]; stock_indx < stock_count; ++stock_indx) {
 
 			std::string ticker = market_data_json["tickers"][stock_indx]["ticker"];
 
+
+std::cout << "11" << std::endl;
+
 			if(!open_position_map[ticker] && !buy_order_map[ticker]) {
 
 				
-				float limit_price = static_cast<float>(market_data_json["tickers"]["min"]["vw"])*static_cast<float>(0.98);
+				float limit_price = static_cast<float>(market_data_json["tickers"][stock_indx]["min"]["vw"])*static_cast<float>(0.98);
 				uint64_t qty = capital_distribution/limit_price;
 				request = "https://paper-api.alpaca.markets/v2/orders";
 
 				decltype(json::parse(response)) param_json;
+
+
+std::cout << "12" << std::endl;
 
 				param_json["side"]        		= "buy";
 				param_json["symbol"]      		= ticker;
 				param_json["type"]   	  		= "limit";
 				param_json["limit_price"] 		= limit_price;
 				param_json["qty"]         		= qty;
-				param_json["time_in_force"]     = "ioc";
+				param_json["time_in_force"]     = "gtc";
+
+
+std::cout << "13" << std::endl;
 
 				uint64_t status_code = fulfill_post_request(request, response, param_json.dump());
+				++request_limit;
 
 				while((status_code == 403) && ((qty/=2) >= 1)) {
 
@@ -458,6 +481,9 @@ int main(void) {
 					param_json["qty"] = qty;
 
 					status_code = fulfill_post_request(request, response, param_json.dump());
+					++request_limit;
+
+std::cout << "14" << std::endl;
 				}
 
 				if(status_code != 200) {
@@ -474,6 +500,7 @@ int main(void) {
 
 		request = "https://paper-api.alpaca.markets/v2/positions";
 		fulfill_get_request(request, response);
+		++request_limit;
 
 		// Attempt to parse response into json
 		while(true) {
@@ -500,12 +527,18 @@ int main(void) {
 		uint64_t position_indx2 = 0;
 		while(market_data_json[position_indx2] != nullptr) {
 
+
+std::cout << "15" << std::endl;
+
 			std::string ticker = market_data_json[position_indx2]["symbol"];
 			
 			buy_order_map[ticker]  = false;
 	
 
 			if(sell_order_map[ticker] == false) {
+
+
+				request = "https://paper-api.alpaca.markets/v2/orders";
 
 			
 				decltype(json::parse(response)) param_json;
@@ -518,9 +551,14 @@ int main(void) {
 				param_json["time_in_force"]     = "gtc";
 
 				uint64_t status_code = fulfill_post_request(request, response, param_json.dump());
+				++request_limit;
+
+
+std::cout << "16" << std::endl;
 
 				if(status_code != 200) {
 					std::cerr << "Non OK status when submitting sell order for " << ticker << ". Status was: " << status_code << std::endl;
+					std::cerr << param_json.dump(4) << std::endl;
 				}
 
 				sell_order_map[ticker] = true;
@@ -537,11 +575,15 @@ int main(void) {
 		}
 
 
-		if((NOW - last_minute) >= 60) {
+		if((NOW - last_minute) >= 60000) {
+
+			request_limit = 0;
 
 			request = "https://paper-api.alpaca.markets/v2/orders";
 
 			fulfill_get_request(request, response);
+			++request_limit;
+ 
 
 			while(1) {
 
@@ -565,14 +607,22 @@ int main(void) {
 			}
 
 			request = "https://paper-api.alpaca.markets/v2/orders";
+	
 			uint64_t order_indx = 0;
 			while(market_data_json[order_indx] != nullptr) {
+
+
+std::cout << "17" << std::endl;
 
 				if(static_cast<std::string>(market_data_json[order_indx]["side"]) == static_cast<std::string>("buy")) {
 					std::string order_id = "/" + static_cast<std::string>(market_data_json[order_indx]["id"]);
 
 					fulfill_delete_request(request, response, order_id);
+					++request_limit;
 				}
+
+
+std::cout << "18" << std::endl;
 
 				++order_indx;
 			}
@@ -584,6 +634,15 @@ int main(void) {
 			last_minute = NOW;
 
 		}
+std::cout << "19" << std::endl;
+
+		uint64_t ms_to_prevent_request_limit = 0;
+		if((request_limit >= 180) && (( ms_to_prevent_request_limit = (NOW - last_minute)) < 60000)) {
+			std::cout << "Sleeping to prevent request limit" << std::endl;
+			std::this_thread::sleep_for(std::chrono::milliseconds(std::max(60000 - ms_to_prevent_request_limit, static_cast<uint64_t>(0)) ));
+		}
+
+
 
 	}
 	
