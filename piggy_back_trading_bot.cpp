@@ -17,7 +17,7 @@ using json = nlohmann::json;
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
 #define START_MONTH "01"
-#define START_DAY 	"11"
+#define START_DAY 	"13"
 #define START_YEAR  "2021"
 #define NOW (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
 
@@ -236,12 +236,12 @@ int main(void) {
 	}
 
 	// Put thread to sleep until next market open
-	// uint64_t ms_till_open = get_time_in_ms(0, 13, 2021, 8, 30, 5) - NOW;
+	uint64_t ms_till_open = get_time_in_ms(0, 13, 2021, 8, 30, 5) - NOW;
 
-	// std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
+	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
 
 	// Request current market data
-	request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2021-01-12?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
+	request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2021-01-13?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
 
 	fulfill_get_request(request, response);
 
@@ -325,10 +325,16 @@ int main(void) {
 
 	
 
-	// if watchlist.size() == 0, sleep till next day
+	if (watchlist.size() == 0) {
+
+		int64_t ms_till_tomorrow = get_time_in_ms(0, 14, 2021, 8, 31, 5) - NOW;
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_tomorrow));
+	}
+	
 
 
-	float capital_distribution = std::min(std::stof(static_cast<std::string>(market_data_json["cash"]))/watchlist.size(), static_cast<float>(2500));
+	float capital_distribution = std::min(std::stof(static_cast<std::string>(market_data_json["cash"]))/watchlist.size(), std::stof(static_cast<std::string>(market_data_json["cash"]))*static_cast<float>(0.05));
 	std::map<std::string, bool> open_position_map, buy_order_map, sell_order_map;
 
 	std::string watchlist_tickers = "";
@@ -347,15 +353,16 @@ int main(void) {
 
 
 	// Put thread to sleep until next minute
-	// int64_t ms_till_start = get_time_in_ms(0, 13, 2021, 8, 31, 5) - NOW;
+	int64_t ms_till_start = get_time_in_ms(0, 13, 2021, 8, 31, 5) - NOW;
 
-	// if(ms_till_start > 0) {
+	if(ms_till_start > 0) {
 
-	// 	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_start));
-	// }
+		std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_start));
+	}
 
 	uint64_t last_minute = NOW;
 	while(true) {
+
 
 		request = "https://paper-api.alpaca.markets/v2/positions";
 		fulfill_get_request(request, response);
@@ -494,6 +501,9 @@ int main(void) {
 		while(market_data_json[position_indx2] != nullptr) {
 
 			std::string ticker = market_data_json[position_indx2]["symbol"];
+			
+			buy_order_map[ticker]  = false;
+	
 
 			if(sell_order_map[ticker] == false) {
 
@@ -514,10 +524,8 @@ int main(void) {
 				}
 
 				sell_order_map[ticker] = true;
-				buy_order_map[ticker]  = false;
 				
 			}
-
 
 			
 			++position_indx2;
