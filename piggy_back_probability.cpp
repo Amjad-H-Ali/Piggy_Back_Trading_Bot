@@ -1,4 +1,4 @@
-/* out20.txt */
+/* out21.txt */
 
 #include <iostream>
 #include <curl/curl.h>
@@ -269,6 +269,14 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 				// Market was closed on this day, so continue to next day.
 				if(market_data_json["resultsCount"] == 0) continue;
 
+                // std::string s = "";
+
+                // for(int i = 0; i < 100; ++i) s+= ((static_cast<std::string>(market_data_json["results"][i]["T"])) + ",");
+
+                // std::cout << s << std::endl;
+
+                // exit(0);
+
                 
 				// The previous day closing price of the stock
 				float previous_day_closing_price;
@@ -295,7 +303,8 @@ std::cout << month+1 << "/" << day << "/" << year << std::endl;
 
                     float volume_percent_change = ((static_cast<float>(market_data_json["results"][ticker_indx]["v"]) - previous_day_volume)/previous_day_volume)*100;
 
-					if((price_percent_change >= 5) && (volume_percent_change >= 500) && (previous_day_volume > 150000)) {	
+
+					if((price_percent_change >= 5) && (volume_percent_change >= 500) && (previous_day_volume > 150000) && (previous_day_closing_price >= 1.5)) {	
 
                         ++day_qualified;		
 
