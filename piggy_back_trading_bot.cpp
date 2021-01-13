@@ -373,7 +373,6 @@ std::cout << "07" << std::endl;
 
 
 
-
 		request = "https://paper-api.alpaca.markets/v2/positions";
 		fulfill_get_request(request, response);
 		++request_limit;
