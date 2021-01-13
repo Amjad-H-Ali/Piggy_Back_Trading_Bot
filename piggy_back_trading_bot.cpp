@@ -560,9 +560,11 @@ int main(void) {
 			uint64_t order_indx = 0;
 			while(market_data_json[order_indx] != nullptr) {
 
-				std::string order_id = "/" + static_cast<std::string>(market_data_json[order_indx]["id"]);
+				if(static_cast<std::string>(market_data_json[order_indx]["side"]) == static_cast<std::string>("buy")) {
+					std::string order_id = "/" + static_cast<std::string>(market_data_json[order_indx]["id"]);
 
-				fulfill_delete_request(request, response, order_id);
+					fulfill_delete_request(request, response, order_id);
+				}
 
 				++order_indx;
 			}
