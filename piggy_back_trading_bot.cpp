@@ -375,7 +375,8 @@ std::cout << "04" << std::endl;
 	// Initial cash we do not use for trading
 	float init_non_trading_cash = std::stof(static_cast<std::string>(market_data_json["cash"])) - (capital_distribution*watchlist.size());
 	
-	std::map<std::string, bool> open_position_map, buy_order_map, sell_order_map;
+	std::map<std::string, bool> open_position_map, buy_order_map;
+	std::map<std::string, uint64_t> sell_order_map;
 
 	// Prepare string of watchlist tickers for market data request
 	std::string watchlist_tickers = "";
@@ -383,7 +384,7 @@ std::cout << "04" << std::endl;
 
 		watchlist_tickers += (ticker + ",");
 
-		open_position_map[ticker] = false, buy_order_map[ticker] = false, sell_order_map[ticker] = false;
+		open_position_map[ticker] = false, buy_order_map[ticker] = false, sell_order_map[ticker] = 0;
 	}
 
 	// Delete last comma
@@ -465,7 +466,8 @@ std::cout << "08" << std::endl;
 		param_json["qty"]         		= qty;
 		param_json["time_in_force"]     = "gtc";
 
-
+		std::cout << "Init buy order: " << param_json.dump() << std::endl;
+		
 	std::cout << "13" << std::endl;
 
 		// Submit order. Decrease quantity and resubmit buy order if insufficient quantity 
@@ -536,17 +538,20 @@ std::cout << "08" << std::endl;
 		uint64_t position_indx = 0;
 		while(market_data_json[position_indx] != nullptr) {
 
-
 std::cout << "15" << std::endl;
 
 			std::string ticker = market_data_json[position_indx]["symbol"];
+
+			uint64_t qty_of_position = std::stoull(static_cast<std::string>(market_data_json[position_indx]["qty"])),
+					 qty_sold        = sell_order_map[ticker];
+			
 			
 			buy_order_map[ticker]     = false;
 			open_position_map[ticker] = true;
 	
 
-			// Submit sell order if already haven't submitted
-			if(sell_order_map[ticker] == false) {
+			// Submit sell order if haven't already submitted, or if portion remains unsold
+			if(qty_of_position > qty_sold) {
 
 
 		
@@ -559,9 +564,10 @@ std::cout << "15" << std::endl;
 				param_json["symbol"]      		= ticker;
 				param_json["type"]   	  		= "trailing_stop";
 				param_json["trail_percent"]     = "0.5";
-				param_json["qty"]         		= market_data_json[position_indx]["qty"];
+				param_json["qty"]         		= (qty_of_position - qty_sold);
 				param_json["time_in_force"]     = "gtc";
 
+				std::cout << "Sell order: " << param_json.dump() << std::endl;
 			
 				uint64_t status_code; 
 		
@@ -574,7 +580,7 @@ std::cout << "15" << std::endl;
 
 std::cout << "16" << std::endl;
 
-				sell_order_map[ticker] = true;
+				sell_order_map[ticker] = qty_of_position;
 				
 			} // If statement: Sell Order
 
@@ -709,6 +715,7 @@ std::cout << "12" << std::endl;
 				param_json["qty"]         		= qty;
 				param_json["time_in_force"]     = "gtc";
 
+				std::cout << "Rebuy order: " << param_json.dump() << std::endl;
 
 std::cout << "13" << std::endl;
 				// If buy order failed, resubmit order with less quantity
@@ -728,7 +735,7 @@ std::cout << "13" << std::endl;
 				}
 				
 
-				sell_order_map[ticker]    = false;
+				sell_order_map[ticker]    = 0;
 				buy_order_map[ticker]     = true;
 				open_position_map[ticker] = false;
 
