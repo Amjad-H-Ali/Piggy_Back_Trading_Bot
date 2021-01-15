@@ -9,21 +9,37 @@
 #include <chrono>
 #include <thread>
 
-
-
-// For convenience
 using json = nlohmann::json;
 
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
-#define START_MONTH "01"
-#define START_DAY 	"12"
-#define START_YEAR  "2021"
+#define SLEEP(MS) std::this_thread::sleep_for(std::chrono::milliseconds(MS))
+#define PREV_MONTH_S "01"
+#define PREV_DAY_S 	"14"
+#define PREV_YEAR_S  "2021"
+#define MONTH_S "01"
+#define DAY_S 	"15"
+#define YEAR_S  "2021"
+#define NEXT_MONTH_S "01"
+#define NEXT_DAY_S 	"19"
+#define NEXT_YEAR_S  "2021"
+#define PREV_MONTH_I 0
+#define PREV_DAY_I 	14
+#define PREV_YEAR_I  2021
+#define MONTH_I 0
+#define DAY_I 	15
+#define YEAR_I  2021
+#define NEXT_MONTH_I 0
+#define NEXT_DAY_I 	19
+#define NEXT_YEAR_I  2021
 #define NOW (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
-#define HOUR 9
-#define MIN 41
-#define NEXT_HOUR 9
-#define NEXT_MINUTE 42
+#define HOUR 8
+#define MIN 30
+#define SEC 5
+#define NEXT_HOUR 8
+#define NEXT_MINUTE 31
+#define NEXT_SEC 5
+#define ACCOUNT "paper-api"
 
 // Appends response to given output string
 static size_t write_data(const char* in, std::size_t size, std::size_t num, char* out) {
@@ -34,6 +50,8 @@ static size_t write_data(const char* in, std::size_t size, std::size_t num, char
 	return size * num;
 }
 
+// Given a string request and parameters does an HTTP POST request to a server and stores
+// response in given string response object.
 uint64_t fulfill_post_request(const std::string& request, std::string& response, const std::string& parameters) {
 
 	// Set HTTP header
@@ -69,6 +87,8 @@ uint64_t fulfill_post_request(const std::string& request, std::string& response,
 	return http_status_code;
 }
 
+// Given a string request and parameters does an HTTP DELETE request to a server and stores
+// response in given string response object.
 uint64_t fulfill_delete_request(const std::string& request, std::string& response, const std::string& parameters) {
 
 	// Set HTTP header
@@ -106,7 +126,7 @@ uint64_t fulfill_delete_request(const std::string& request, std::string& respons
 }
 
 
-// Given a string request, does an HTTP request to a server and stores
+// Given a string request, does an HTTP GET request to a server and stores
 // response in given string response object.
 uint64_t fulfill_get_request(const std::string& request, std::string& response) {
 
@@ -177,19 +197,18 @@ struct Prev_Market_Data_T{
 
 int main(void) {
 
+/* Preparation */	
+
 #if defined (APIKEYID) &&  defined (APISECRETKEY)
 
 	// Request market data for previous open day
-	std::string request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/" START_YEAR "-" START_MONTH "-" START_DAY "?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
+	std::string request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/" PREV_YEAR_S "-" PREV_MONTH_S "-" PREV_DAY_S "?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
 
 	std::string response;
 
 	fulfill_get_request(request, response);
 
 	decltype(json::parse(response)) market_data_json;
-
-
-	
 
 	// Attempt to parse response into json
 	while(true) {
@@ -237,16 +256,17 @@ std::cout << "01" << std::endl;
 			)
 			
 		);
-	}
+	} // For loop: previous market data map
+
 std::cout << "02" << std::endl;
 
 	// Put thread to sleep until next market open
-	uint64_t ms_till_open = get_time_in_ms(0, 13, 2021, HOUR, MIN, 5) - NOW;
+	uint64_t ms_till_open = get_time_in_ms(MONTH_I, DAY_I, YEAR_I, HOUR, MIN, SEC) - NOW;
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_open));
+	SLEEP(ms_till_open);
 
 	// Request current market data
-	request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2021-01-13?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
+	request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/" YEAR_S "-" MONTH_S "-" DAY_S "?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
 
 	fulfill_get_request(request, response);
 
@@ -278,8 +298,9 @@ std::cout << "02" << std::endl;
 	std::vector<std::string> watchlist;
 
 	std::map<std::string, Prev_Market_Data_T>::iterator it_end = prev_market_data_map.end();
+	// Put all stocks in a watchlist that meet the requirement below:
 	// If stock has a relative volume (from last trading day) spike of 500% or more, and has a spike in price of 5% or more, then trade stock
-	// when its price reaches a price 2% (or more) below the VWAP. Sell the stock if the price declines below the last low of the minute ticker.
+	// when its price reaches a price 2% (or more) below the VWAP. Sell the stock if the price declines 0.5% or more.
 	for(uint64_t stock_indx = 0, stock_count = market_data_json["resultsCount"]; stock_indx < stock_count; ++stock_indx) {
 
 		std::map<std::string, Prev_Market_Data_T>::iterator it_prev_market = prev_market_data_map.find(static_cast<std::string>(market_data_json["results"][stock_indx]["T"]));
@@ -297,16 +318,24 @@ std::cout << "02" << std::endl;
 
 			watchlist.emplace_back(static_cast<std::string>(market_data_json["results"][stock_indx]["T"]));
 		}
-	}
+	} // For loop: creating watchlist
 
 
 std::cout << "04" << std::endl;
 
-	request = "https://paper-api.alpaca.markets/v2/account";
+	// Request account information
+	request = "https://" ACCOUNT ".alpaca.markets/v2/account";
 
-	fulfill_get_request(request, response);
-
+	uint64_t status_code;
 	
+	while( (status_code = fulfill_get_request(request, response)) != 200 ) {
+
+		std::cerr << "Error while requesting account. Status Code: " << status_code << " . Retrying ..." << std::endl;
+
+		SLEEP(10);
+	}
+
+
 	// Attempt to parse response into json
 	while(true) {
 
@@ -318,32 +347,38 @@ std::cout << "04" << std::endl;
 		}
 		catch(nlohmann::detail::parse_error err) {
 
-			std::cerr << "Parse error while parsing cash" << std::endl;
+			std::cerr << "Error while parsing account" << std::endl;
 
 		}
 		catch(nlohmann::detail::type_error err) {
 
-			std::cerr << "Type error while parsing cash" << std::endl;
+			std::cerr << "Type error while parsing account" << std::endl;
 
 		}
 	}
 
 	std::cout << "05" << std::endl;
 
+	// If no stocks meet the requirement today, then pause algo till next market open
 	if (watchlist.size() == 0) {
 
-		int64_t ms_till_tomorrow = get_time_in_ms(0, 14, 2021, 8, 30, 5) - NOW;
+		int64_t ms_till_tomorrow = get_time_in_ms(NEXT_MONTH_I, NEXT_DAY_I, NEXT_YEAR_I, HOUR, MIN, SEC) - NOW;
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_tomorrow));
+		SLEEP(ms_till_tomorrow);
 	}
 	std::cout << "06" << std::endl;
 
 
+	// Evenly allocate cash to all stocks in watchlist. Cash distribution should be no greater than 5% of the total cash
 	float capital_distribution = std::min(std::stof(static_cast<std::string>(market_data_json["cash"]))/watchlist.size(), std::stof(static_cast<std::string>(market_data_json["cash"]))*static_cast<float>(0.05));
+	
+	// Initial cash we do not use for trading
+	float init_non_trading_cash = std::stof(static_cast<std::string>(market_data_json["cash"])) - (capital_distribution*watchlist.size());
+	
 	std::map<std::string, bool> open_position_map, buy_order_map, sell_order_map;
 
+	// Prepare string of watchlist tickers for market data request
 	std::string watchlist_tickers = "";
-
 	for(const std::string& ticker : watchlist) {
 
 		watchlist_tickers += (ticker + ",");
@@ -358,65 +393,37 @@ std::cout << "04" << std::endl;
 std::cout << "07" << std::endl;
 
 	// Put thread to sleep until next minute
-	int64_t ms_till_start = get_time_in_ms(0, 13, 2021, NEXT_HOUR, NEXT_MINUTE, 5) - NOW;
+	int64_t ms_till_start = get_time_in_ms(MONTH_I, DAY_I, YEAR_I, NEXT_HOUR, NEXT_MINUTE, NEXT_SEC) - NOW;
 
 	if(ms_till_start > 0) {
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(ms_till_start));
+		SLEEP(ms_till_start);
 	}
 
-	std::cout << "08" << std::endl;
+std::cout << "08" << std::endl;
 
-	uint64_t last_minute = NOW, request_limit = 0;
-
-	while(true) {
+/* End of Preparation */	
 
 
 
-		request = "https://paper-api.alpaca.markets/v2/positions";
-		fulfill_get_request(request, response);
-		++request_limit;
+/* Initial Buy Orders */	
 
-		// Attempt to parse response into json
-		while(true) {
+	// Submit limit order for each stock in watchlist
+	for(uint64_t stock_indx = 0, stock_count = market_data_json["count"]; stock_indx < stock_count; ++stock_indx) {
 
-			try {
+		std::string ticker = market_data_json["tickers"][stock_indx]["ticker"];
 
-				market_data_json = json::parse(response);
-
-				break;
-			}
-			catch(nlohmann::detail::parse_error err) {
-
-				std::cerr << "Parse error while parsing positions" << std::endl;
-
-			}
-			catch(nlohmann::detail::type_error err) {
-
-				std::cerr << "Type error while parsing positions" << std::endl;
-
-			}
-		}
-
-std::cout << "09" << std::endl;
-		uint64_t position_indx = 0;
-		while(market_data_json[position_indx] != nullptr) {
-
-			std::string ticker = market_data_json[position_indx]["symbol"];
-
-			open_position_map[ticker] = true;
-			buy_order_map[ticker]     = false;
-			
-			++position_indx;
-		}
-
-
+		// Request data for all stocks in watchlist
 		request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
 
+		uint64_t status_code; 
 
-		fulfill_get_request(request, response);
-		++request_limit;
+		while((status_code = fulfill_get_request(request, response)) != 200) {
 
+			std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
+
+			SLEEP(10);
+		}
 
 		// Attempt to parse response into json
 		while(true) {
@@ -439,67 +446,68 @@ std::cout << "09" << std::endl;
 			}
 		}
 
-std::cout << "10" << std::endl;
+		// Compute 2% below VWAP
+		float limit_price = static_cast<float>(market_data_json["tickers"][stock_indx]["min"]["vw"])*static_cast<float>(0.98);
+		// Compute quantity to buy
+		uint64_t qty = capital_distribution/limit_price;
 
-		for(uint64_t stock_indx = 0, stock_count = market_data_json["count"]; stock_indx < stock_count; ++stock_indx) {
-
-			std::string ticker = market_data_json["tickers"][stock_indx]["ticker"];
-
-
-std::cout << "11" << std::endl;
-
-			if(!open_position_map[ticker] && !buy_order_map[ticker]) {
-
-				
-				float limit_price = static_cast<float>(market_data_json["tickers"][stock_indx]["min"]["vw"])*static_cast<float>(0.98);
-				uint64_t qty = capital_distribution/limit_price;
-				request = "https://paper-api.alpaca.markets/v2/orders";
-
-				decltype(json::parse(response)) param_json;
+		request = "https://" ACCOUNT ".alpaca.markets/v2/orders";
 
 
-std::cout << "12" << std::endl;
+		// Create order string
+		decltype(json::parse(response)) param_json;
+	std::cout << "12" << std::endl;
 
-				param_json["side"]        		= "buy";
-				param_json["symbol"]      		= ticker;
-				param_json["type"]   	  		= "limit";
-				param_json["limit_price"] 		= limit_price;
-				param_json["qty"]         		= qty;
-				param_json["time_in_force"]     = "gtc";
+		param_json["side"]        		= "buy";
+		param_json["symbol"]      		= ticker;
+		param_json["type"]   	  		= "limit";
+		param_json["limit_price"] 		= limit_price;
+		param_json["qty"]         		= qty;
+		param_json["time_in_force"]     = "gtc";
 
 
-std::cout << "13" << std::endl;
+	std::cout << "13" << std::endl;
 
-				uint64_t status_code = fulfill_post_request(request, response, param_json.dump());
-				++request_limit;
+		// Submit order. Decrease quantity and resubmit buy order if insufficient quantity 
+		while((status_code = fulfill_post_request(request, response, param_json.dump())) != 200) {
 
-				while((status_code == 403) && ((qty/=2) >= 1)) {
+			std::cerr << "Error while submitting reentry order for " << ticker << ". Status Code: " << status_code << " . Retrying ..." << std::endl;
 
-					std::cerr << "Insuffucient Buying Power. Decreasing qty" << std::endl;
+			if(status_code == 403) {
 
-					param_json["qty"] = qty;
-
-					status_code = fulfill_post_request(request, response, param_json.dump());
-					++request_limit;
-
-std::cout << "14" << std::endl;
-				}
-
-				if(status_code != 200) {
-					std::cerr << "Non OK status when submitting buy order for " << ticker << ". Status was: " << status_code << std::endl;
-
-					continue;
-				}
-
-				sell_order_map[ticker]  = false;
-				buy_order_map[ticker]   = true;
-	
+				std::cerr << "Insuffucient Buying Power. Decreasing qty" << std::endl;
+				param_json["qty"] = (qty/=2);
+			}
+			else {
+				SLEEP(10);
 			}
 		}
 
-		request = "https://paper-api.alpaca.markets/v2/positions";
-		fulfill_get_request(request, response);
-		++request_limit;
+		buy_order_map[ticker]  = true;
+
+	} // For-loop: Initial limit buy orders of all stocks in watchlist
+
+/* End of Initial Buy Orders */
+
+
+/* Sell Orders/Reentry Orders/Cancel Sold Orders/Refresh Orders */
+
+	// For each position, submit a sell order. For sold positions, submit new limit buy order. 
+	// Every minute, refresh unfulfilled orders with updated limit entry prices.
+	uint64_t last_minute = NOW;
+	while(true) {
+		
+		// Request current live positions
+		request = "https://" ACCOUNT ".alpaca.markets/v2/positions";
+		uint64_t status_code;
+		
+		while( (status_code = fulfill_get_request(request, response)) != 200 ) {
+
+			std::cerr << "Error while requesting positions. Status Code: " << status_code << " . Retrying ..." << std::endl;
+
+			SLEEP(10);
+		}
+
 
 		// Attempt to parse response into json
 		while(true) {
@@ -522,22 +530,27 @@ std::cout << "14" << std::endl;
 			}
 		}
 
+/* Sell Orders */
 
-		uint64_t position_indx2 = 0;
-		while(market_data_json[position_indx2] != nullptr) {
+		// For each position, submit a sell order. 
+		uint64_t position_indx = 0;
+		while(market_data_json[position_indx] != nullptr) {
 
 
 std::cout << "15" << std::endl;
 
-			std::string ticker = market_data_json[position_indx2]["symbol"];
+			std::string ticker = market_data_json[position_indx]["symbol"];
 			
-			buy_order_map[ticker]  = false;
+			buy_order_map[ticker]     = false;
+			open_position_map[ticker] = true;
 	
 
+			// Submit sell order if already haven't submitted
 			if(sell_order_map[ticker] == false) {
 
 
-				request = "https://paper-api.alpaca.markets/v2/orders";
+		
+				request = "https://" ACCOUNT ".alpaca.markets/v2/orders";
 
 			
 				decltype(json::parse(response)) param_json;
@@ -546,44 +559,203 @@ std::cout << "15" << std::endl;
 				param_json["symbol"]      		= ticker;
 				param_json["type"]   	  		= "trailing_stop";
 				param_json["trail_percent"]     = "0.5";
-				param_json["qty"]         		= market_data_json[position_indx2]["qty"];
+				param_json["qty"]         		= market_data_json[position_indx]["qty"];
 				param_json["time_in_force"]     = "gtc";
 
-				uint64_t status_code = fulfill_post_request(request, response, param_json.dump());
-				++request_limit;
+			
+				uint64_t status_code; 
+		
+				while((status_code = fulfill_post_request(request, response, param_json.dump())) != 200) {
 
+					std::cerr << "Error while submitting sell order for " << ticker << ". Status Code: " << status_code << " . Retrying ..." << std::endl;
+
+					SLEEP(10);
+				}
 
 std::cout << "16" << std::endl;
 
-				if(status_code != 200) {
-					std::cerr << "Non OK status when submitting sell order for " << ticker << ". Status was: " << status_code << std::endl;
-					std::cerr << param_json.dump(4) << std::endl;
-				}
-
 				sell_order_map[ticker] = true;
 				
-			}
+			} // If statement: Sell Order
 
 			
-			++position_indx2;
-		}
+			++position_indx;
+
+		} // While loop: Submit sell orders 
+
+/* End of Sell Orders */		
 
 
-		for(auto& open_position_pair: open_position_map) {
-			open_position_pair.second = false;
-		}
+
+/* Reentry Orders */
+
+		// If position was sold, submit new limit buy order.
+		// Prepare string with stocks to rebuy for market data request
+		std::string reentry_watchlist_tickers = "";
+		uint64_t reentry_count = 0;
+		for(const auto& open_position_pair : open_position_map) {
+
+			if((buy_order_map[open_position_pair.first] == false) && (open_position_pair.second == false)) {
+
+				reentry_watchlist_tickers += (open_position_pair.first + ",");
+
+				++reentry_count;
+				
+			}
+		} // For loop: Prepare string with stocks to rebuy 
+
+		// If there are stocks to rebuy, submit limit order for each one
+		if(reentry_count > 0) {
+
+			reentry_watchlist_tickers.erase(reentry_watchlist_tickers.end()-1);
+
+/* Request Account Info */
+
+			// Request account information
+			request = "https://" ACCOUNT ".alpaca.markets/v2/account";
+
+			uint64_t status_code;
+			
+			while( (status_code = fulfill_get_request(request, response)) != 200 ) {
+
+				std::cerr << "Error while requesting account for cash redistribution. Status Code: " << status_code << " . Retrying ..." << std::endl;
+
+				SLEEP(10);
+			}
 
 
+			// Attempt to parse response into json
+			while(true) {
+
+				try {
+
+					market_data_json = json::parse(response);
+
+					break;
+				}
+				catch(nlohmann::detail::parse_error err) {
+
+					std::cerr << "Error while parsing account for cash redistribution" << std::endl;
+
+				}
+				catch(nlohmann::detail::type_error err) {
+
+					std::cerr << "Type error while parsing account for cash redistribution" << std::endl;
+
+				}
+			}
+
+			float capital_redistribution = (std::stof(static_cast<std::string>(market_data_json["cash"])) - init_non_trading_cash)/reentry_count;
+
+
+/* End of Request for Account Info */
+
+
+			// Request market data for stocks to rebuy 
+			request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + reentry_watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
+	
+			while((status_code = fulfill_get_request(request, response)) != 200) {
+
+				std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
+
+				SLEEP(10);
+			}
+
+			// Attempt to parse response into json
+			while(true) {
+
+				try {
+
+					market_data_json = json::parse(response);
+
+					break;
+				}
+				catch(nlohmann::detail::parse_error err) {
+
+					std::cerr << "Parse error while parsing snap shot of second+ entry stocks" << std::endl;
+
+				}
+				catch(nlohmann::detail::type_error err) {
+
+					std::cerr << "Type error while parsing snap shot of second+ entry stocks" << std::endl;
+
+				}
+			}
+
+			// Calculate limit price and submit order for each stock to rebuy
+			for(uint64_t stock_indx = 0, stock_count = market_data_json["count"]; stock_indx < stock_count; ++stock_indx) {
+
+				std::string ticker = market_data_json["tickers"][stock_indx]["ticker"];
+
+
+std::cout << "11" << std::endl;
+
+				// Calculate the limit price, 2% below the VWAP, to buy this stock
+				float limit_price = static_cast<float>(market_data_json["tickers"][stock_indx]["min"]["vw"])*static_cast<float>(0.98);
+				// Calculate the amount to buy
+				uint64_t qty = capital_redistribution/limit_price;
+
+				// Create order string and submit request
+				request = "https://" ACCOUNT ".alpaca.markets/v2/orders";
+
+				decltype(json::parse(response)) param_json;
+
+std::cout << "12" << std::endl;
+
+				param_json["side"]        		= "buy";
+				param_json["symbol"]      		= ticker;
+				param_json["type"]   	  		= "limit";
+				param_json["limit_price"] 		= limit_price;
+				param_json["qty"]         		= qty;
+				param_json["time_in_force"]     = "gtc";
+
+
+std::cout << "13" << std::endl;
+				// If buy order failed, resubmit order with less quantity
+				uint64_t status_code; 
+				while((status_code = fulfill_post_request(request, response, param_json.dump())) != 200) {
+
+					std::cerr << "Error while submitting reentry order for " << ticker << ". Status Code: " << status_code << " . Retrying ..." << std::endl;
+
+					if(status_code == 403) {
+
+						std::cerr << "Insuffucient Buying Power. Decreasing qty" << std::endl;
+						param_json["qty"] = (qty/=2);
+					}
+					else {
+						SLEEP(10);
+					}
+				}
+				
+
+				sell_order_map[ticker]    = false;
+				buy_order_map[ticker]     = true;
+				open_position_map[ticker] = false;
+
+				
+			} // For loop: Calculate limit price and submit order for each stock to rebuy
+
+		} // If statement: If there are stocks to rebuy, submit limit order for each one
+
+/* End of Reentry Orders */
+
+
+/* Refresh Orders */
+
+		// New minute, cancel all unfulfilled buy orders
 		if((NOW - last_minute) >= 60000) {
 
-			request_limit = 0;
+			// Get a list of all unfulfilled orders
+			request = "https://" ACCOUNT ".alpaca.markets/v2/orders";
 
-			request = "https://paper-api.alpaca.markets/v2/orders";
+			uint64_t status_code; 
 
-			fulfill_get_request(request, response);
-			++request_limit;
- 
+			while((status_code = fulfill_get_request(request, response)) != 200) {
 
+				std::cerr << "Error while requesting list of orders. Status code: " << status_code << " . Retrying ..." << std::endl;
+
+				SLEEP(10);
+			}
 			while(1) {
 
 				try {
@@ -605,46 +777,64 @@ std::cout << "16" << std::endl;
 				}
 			}
 
-			request = "https://paper-api.alpaca.markets/v2/orders";
+			// Cancel each unfulfilled buy order
+			request = "https://" ACCOUNT ".alpaca.markets/v2/orders";
 	
 			uint64_t order_indx = 0;
 			while(market_data_json[order_indx] != nullptr) {
 
-
 std::cout << "17" << std::endl;
-
+				// Order type is buy, delete it
 				if(static_cast<std::string>(market_data_json[order_indx]["side"]) == static_cast<std::string>("buy")) {
 					std::string order_id = "/" + static_cast<std::string>(market_data_json[order_indx]["id"]);
 
-					fulfill_delete_request(request, response, order_id);
-					++request_limit;
-				}
+	
+					while((status_code = fulfill_delete_request(request, response, order_id)) == 429) {
+
+						std::cerr << "Error while requesting to cancel order. Status code: " << status_code << " . Retrying ..." << std::endl;
+
+						SLEEP(10);
+					}
+
+
+					if(status_code != 200) {
+
+						std::cerr << "Error while requesting to cancel order. Status code: " << status_code << std::endl;
+						std::cerr << "Order: " << market_data_json[order_indx].dump() << std::endl;
+					}
+
+				} // If statement: Delete only buy orders
 
 
 std::cout << "18" << std::endl;
 
 				++order_indx;
-			}
 
+			} // While loop: Delete buy orders
+
+			// Set all buy orders in map to false
 			for(auto& buy_order_pair: buy_order_map) {
 				buy_order_pair.second = false;
 			}
 
+			// Update minute
 			last_minute = NOW;
 
+		} // If: New minute, cancel all unfulfilled buy orders
+
+/* End of Refresh Orders */
+
+
+		// Set all open positions to false
+		for(auto& open_position_pair : open_position_map) {
+			open_position_pair.second = false;
 		}
-std::cout << "19" << std::endl;
 
-		uint64_t ms_to_prevent_request_limit = 0;
-		if((request_limit >= 180) && (( ms_to_prevent_request_limit = (NOW - last_minute)) < 60000)) {
-			std::cout << "Sleeping to prevent request limit" << std::endl;
-			std::this_thread::sleep_for(std::chrono::milliseconds(std::max(60000 - ms_to_prevent_request_limit, static_cast<uint64_t>(0)) ));
-		}
+		SLEEP(10);
 
+	} // While loop: Submit sell orders, submit buy orders on stocks that were sold
 
-
-	}
-	
+/* End of Sell Orders/Reentry Orders/Cancel Sold Orders/Refresh Orders */
 
 #else   
     std::cerr << "API-KEY-ID and/or API-SECRET-KEY are/is undefined."  << std::endl;
@@ -652,73 +842,4 @@ std::cout << "19" << std::endl;
     return 1;
 #endif
 
-}
-
-
-
-
-
-
-
-
-
-	// Distribute even amount of capital for each stock in watchlist
-
-		// std::min(50k/watchlist.size(), 2500)
-
-	// Create snap shot request string with all stocks in watchlist
-
-	// Insert all stocks in watchlist in all maps with ticker and bool set to false
-		
-	// Wait till 8:31:05 AM
-
-	// While true:
-
-		// Request positions
-
-		// For each position:
-
-			// Set open_position_map[position.symbol] = true
-
-			// Set buy_order_map[position.symbol] = false
-
-
-		// Request snap shot of stocks in watchlist
-
-		// For each stock in Response object:
-
-			// if (open_position_map[position.symbol] == false) and (buy_order_map[position.symbol] == false):
-
-				// Calculate 2% below VWAP 
-
-				// Divide capital buy that price
-
-				// Sumbit a limit order for 2% below vwap with correct qty
-
-				// Set sell_order_map[position.symbol] = false
-
-				// Set buy_order_map[position.symbol] = true
-
-
-		// Request positions
-
-		// For each position:
-		
-			// If sell_order_map[position.symbol] == false:
-
-				// Submit a trailing stop order with a trail_percent of 0.5% for the correct qty
-
-				// Set sell_order_map[position.symbol] = true
-
-				// Set buy_order_map[position.symbol] = false
-
-		
-		// Set all tickers in open_position_map to false
-
-		// if now >= next_minute:
-
-			// Cancel all open buy orders
-
-			// Set all tickers in buy_order_map to false
-
-			// next_minute = now + 1000 (1min)
+} // main
