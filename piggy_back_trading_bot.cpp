@@ -332,7 +332,7 @@ std::cout << "04" << std::endl;
 
 		std::cerr << "Error while requesting account. Status Code: " << status_code << " . Retrying ..." << std::endl;
 
-		SLEEP(10);
+		SLEEP(500);
 	}
 
 
@@ -359,6 +359,8 @@ std::cout << "04" << std::endl;
 
 	std::cout << "05" << std::endl;
 
+	std::cout << "Watchlist Size: " << watchlist.size() << std::endl;
+
 	// If no stocks meet the requirement today, then pause algo till next market open
 	if (watchlist.size() == 0) {
 
@@ -368,10 +370,12 @@ std::cout << "04" << std::endl;
 	}
 	std::cout << "06" << std::endl;
 
+	std::cout << "I CASH: " << std::stof(static_cast<std::string>(market_data_json["cash"])) << std::endl;
 
 	// Evenly allocate cash to all stocks in watchlist. Cash distribution should be no greater than 5% of the total cash
 	float capital_distribution = std::min(std::stof(static_cast<std::string>(market_data_json["cash"]))/watchlist.size(), std::stof(static_cast<std::string>(market_data_json["cash"]))*static_cast<float>(0.05));
 	
+	std::cout << "I CASH D: " << capital_distribution << std::endl;
 	// Initial cash we do not use for trading
 	float init_non_trading_cash = std::stof(static_cast<std::string>(market_data_json["cash"])) - (capital_distribution*watchlist.size());
 	
@@ -409,43 +413,44 @@ std::cout << "08" << std::endl;
 
 /* Initial Buy Orders */	
 
+
+	// Request data for all stocks in watchlist
+	request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
+
+	while((status_code = fulfill_get_request(request, response)) != 200) {
+
+		std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
+
+		SLEEP(500);
+	}
+
+	// Attempt to parse response into json
+	while(true) {
+
+		try {
+
+			market_data_json = json::parse(response);
+
+			break;
+		}
+		catch(nlohmann::detail::parse_error err) {
+
+			std::cerr << "Parse error while parsing snap shot of all stocks" << std::endl;
+
+		}
+		catch(nlohmann::detail::type_error err) {
+
+			std::cerr << "Type error while parsing snap shot of all stocks" << std::endl;
+
+		}
+	}
+
+
+
 	// Submit limit order for each stock in watchlist
 	for(uint64_t stock_indx = 0, stock_count = market_data_json["count"]; stock_indx < stock_count; ++stock_indx) {
 
 		std::string ticker = market_data_json["tickers"][stock_indx]["ticker"];
-
-		// Request data for all stocks in watchlist
-		request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
-
-		uint64_t status_code; 
-
-		while((status_code = fulfill_get_request(request, response)) != 200) {
-
-			std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
-
-			SLEEP(10);
-		}
-
-		// Attempt to parse response into json
-		while(true) {
-
-			try {
-
-				market_data_json = json::parse(response);
-
-				break;
-			}
-			catch(nlohmann::detail::parse_error err) {
-
-				std::cerr << "Parse error while parsing snap shot of all stocks" << std::endl;
-
-			}
-			catch(nlohmann::detail::type_error err) {
-
-				std::cerr << "Type error while parsing snap shot of all stocks" << std::endl;
-
-			}
-		}
 
 		// Compute 2% below VWAP
 		float limit_price = static_cast<float>(market_data_json["tickers"][stock_indx]["min"]["vw"])*static_cast<float>(0.98);
@@ -467,7 +472,7 @@ std::cout << "08" << std::endl;
 		param_json["time_in_force"]     = "gtc";
 
 		std::cout << "Init buy order: " << param_json.dump() << std::endl;
-		
+
 	std::cout << "13" << std::endl;
 
 		// Submit order. Decrease quantity and resubmit buy order if insufficient quantity 
@@ -481,7 +486,7 @@ std::cout << "08" << std::endl;
 				param_json["qty"] = (qty/=2);
 			}
 			else {
-				SLEEP(10);
+				SLEEP(500);
 			}
 		}
 
@@ -507,7 +512,7 @@ std::cout << "08" << std::endl;
 
 			std::cerr << "Error while requesting positions. Status Code: " << status_code << " . Retrying ..." << std::endl;
 
-			SLEEP(10);
+			SLEEP(500);
 		}
 
 
@@ -575,7 +580,7 @@ std::cout << "15" << std::endl;
 
 					std::cerr << "Error while submitting sell order for " << ticker << ". Status Code: " << status_code << " . Retrying ..." << std::endl;
 
-					SLEEP(10);
+					SLEEP(500);
 				}
 
 std::cout << "16" << std::endl;
@@ -626,7 +631,7 @@ std::cout << "16" << std::endl;
 
 				std::cerr << "Error while requesting account for cash redistribution. Status Code: " << status_code << " . Retrying ..." << std::endl;
 
-				SLEEP(10);
+				SLEEP(500);
 			}
 
 
@@ -651,7 +656,10 @@ std::cout << "16" << std::endl;
 				}
 			}
 
+			std::cout << "R CASH: " << std::stof(static_cast<std::string>(market_data_json["cash"])) << std::endl;
 			float capital_redistribution = (std::stof(static_cast<std::string>(market_data_json["cash"])) - init_non_trading_cash)/reentry_count;
+
+			std::cout << "R CASH D: " << capital_redistribution << std::endl;
 
 
 /* End of Request for Account Info */
@@ -664,7 +672,7 @@ std::cout << "16" << std::endl;
 
 				std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
 
-				SLEEP(10);
+				SLEEP(500);
 			}
 
 			// Attempt to parse response into json
@@ -730,7 +738,7 @@ std::cout << "13" << std::endl;
 						param_json["qty"] = (qty/=2);
 					}
 					else {
-						SLEEP(10);
+						SLEEP(500);
 					}
 				}
 				
@@ -761,7 +769,7 @@ std::cout << "13" << std::endl;
 
 				std::cerr << "Error while requesting list of orders. Status code: " << status_code << " . Retrying ..." << std::endl;
 
-				SLEEP(10);
+				SLEEP(500);
 			}
 			while(1) {
 
@@ -800,11 +808,11 @@ std::cout << "17" << std::endl;
 
 						std::cerr << "Error while requesting to cancel order. Status code: " << status_code << " . Retrying ..." << std::endl;
 
-						SLEEP(10);
+						SLEEP(500);
 					}
 
 
-					if(status_code != 200) {
+					if(status_code != 204) {
 
 						std::cerr << "Error while requesting to cancel order. Status code: " << status_code << std::endl;
 						std::cerr << "Order: " << market_data_json[order_indx].dump() << std::endl;
@@ -837,7 +845,7 @@ std::cout << "18" << std::endl;
 			open_position_pair.second = false;
 		}
 
-		SLEEP(10);
+		SLEEP(500);
 
 	} // While loop: Submit sell orders, submit buy orders on stocks that were sold
 
