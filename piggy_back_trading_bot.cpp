@@ -8,8 +8,12 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <cpprest/ws_client.h>
+
 
 using json = nlohmann::json;
+using namespace web;
+using namespace web::websockets::client;
 
 #define STR(X) #X
 #define STRINGIZE_VAL(X) STR(X)
@@ -201,14 +205,55 @@ int main(void) {
 
 #if defined (APIKEYID) &&  defined (APISECRETKEY)
 
+
+	websocket_callback_client client;
+	websocket_outgoing_message out_msg;
+
+	std::string response;
+	decltype(json::parse(response)) market_data_json;
+
+	// Handler for incoming messages from server
+	client.set_message_handler([&](const websocket_incoming_message &in_msg)
+	{
+		(in_msg.extract_string()).then([&](const std::string& body) {
+
+			try {
+				market_data_json = json::parse(body);
+			}
+			catch(const nlohmann::detail::parse_error &err) {
+
+				std::cerr << "Nothing to Parse" << std::endl;
+			}
+			
+		}).wait();;
+	});
+	
+
+	// Connect to live stream
+  	client.connect("wss://socket.polygon.io/stocks").wait();
+
+	// Send authentication
+	out_msg.set_utf8_message("{\"action\":\"auth\",\"params\":\"" STRINGIZE_VAL(APIKEYID) "\"}");
+	client.send(out_msg).wait();
+
+	// Subscribe to stocks
+	out_msg.set_utf8_message("{\"action\":\"subscribe\",\"params\":\"\"}");
+	client.send(out_msg).wait();
+
+	// Read live stream updates
+	while(true) {
+		std::cout << market_data_json.dump() << std::endl;
+		SLEEP(1000);
+	}
+
+	client.close().wait();
+
+	exit(0);
+
 	// Request market data for previous open day
 	std::string request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/" PREV_YEAR_S "-" PREV_MONTH_S "-" PREV_DAY_S "?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
 
-	std::string response;
-
 	fulfill_get_request(request, response);
-
-	decltype(json::parse(response)) market_data_json;
 
 	// Attempt to parse response into json
 	while(true) {
@@ -444,7 +489,6 @@ std::cout << "08" << std::endl;
 
 		}
 	}
-
 
 
 	// Submit limit order for each stock in watchlist
