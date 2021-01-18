@@ -205,53 +205,12 @@ int main(void) {
 
 #if defined (APIKEYID) &&  defined (APISECRETKEY)
 
-
-	websocket_callback_client client;
-	websocket_outgoing_message out_msg;
-
 	std::string response;
-	decltype(json::parse(response)) market_data_json;
-
-	// Handler for incoming messages from server
-	client.set_message_handler([&](const websocket_incoming_message &in_msg)
-	{
-		(in_msg.extract_string()).then([&](const std::string& body) {
-
-			try {
-				market_data_json = json::parse(body);
-			}
-			catch(const nlohmann::detail::parse_error &err) {
-
-				std::cerr << "Nothing to Parse" << std::endl;
-			}
-			
-		}).wait();;
-	});
-	
-
-	// Connect to live stream
-  	client.connect("wss://socket.polygon.io/stocks").wait();
-
-	// Send authentication
-	out_msg.set_utf8_message("{\"action\":\"auth\",\"params\":\"" STRINGIZE_VAL(APIKEYID) "\"}");
-	client.send(out_msg).wait();
-
-	// Subscribe to stocks
-	out_msg.set_utf8_message("{\"action\":\"subscribe\",\"params\":\"\"}");
-	client.send(out_msg).wait();
-
-	// Read live stream updates
-	while(true) {
-		std::cout << market_data_json.dump() << std::endl;
-		SLEEP(1000);
-	}
-
-	client.close().wait();
-
-	exit(0);
 
 	// Request market data for previous open day
 	std::string request = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/" PREV_YEAR_S "-" PREV_MONTH_S "-" PREV_DAY_S "?unadjusted=false&apiKey=" STRINGIZE_VAL(APIKEYID);
+	
+	decltype(json::parse(response)) market_data_json;
 
 	fulfill_get_request(request, response);
 
@@ -443,52 +402,116 @@ std::cout << "04" << std::endl;
 std::cout << "07" << std::endl;
 
 	// Put thread to sleep until next minute
-	int64_t ms_till_start = get_time_in_ms(MONTH_I, DAY_I, YEAR_I, NEXT_HOUR, NEXT_MINUTE, NEXT_SEC) - NOW;
+	// int64_t ms_till_start = get_time_in_ms(MONTH_I, DAY_I, YEAR_I, NEXT_HOUR, NEXT_MINUTE, NEXT_SEC) - NOW;
 
-	if(ms_till_start > 0) {
+	// if(ms_till_start > 0) {
 
-		SLEEP(ms_till_start);
-	}
+	// 	SLEEP(ms_till_start);
+	// }
 
 std::cout << "08" << std::endl;
 
 /* End of Preparation */	
 
 
+/* Subscribe */
+
+// Stocks Aggregate:
+{
+    "ev": "AM",             // Event Type ( A = Second Agg, AM = Minute Agg )
+    "sym": "MSFT",          // Symbol Ticker
+    "v": 10204,             // Tick Volume
+    "av": 200304,           // Accumulated Volume ( Today )
+    "op": 114.04,           // Today's official opening price
+    "vw": 114.4040,         // VWAP (Volume Weighted Average Price)
+    "o": 114.11,            // Tick Open Price
+    "c": 114.14,            // Tick Close Price
+    "h": 114.19,            // Tick High Price
+    "l": 114.09,            // Tick Low Price
+    "a": 114.1314,          // Tick Average / VWAP Price
+    "s": 1536036818784,     // Tick Start Timestamp ( Unix MS )
+    "e": 1536036818784,     // Tick End Timestamp ( Unix MS )
+}
+
+	websocket_callback_client client;
+	websocket_outgoing_message out_msg;
+
+	decltype(json::parse(response)) market_data_json_real_time;
+
+	// Handler for incoming messages from server
+	client.set_message_handler([&](const websocket_incoming_message &in_msg)
+	{
+		(in_msg.extract_string()).then([&](const std::string& body) {
+
+			while(true) {
+
+				try {
+					market_data_json_real_time = json::parse(body);
+					break;
+				}
+				catch(const nlohmann::detail::parse_error &err) {
+
+					std::cerr << "No real-time data to Parse" << std::endl;
+					continue;
+				}
+			}
+			
+		}).wait();;
+	});
+	
+
+	// Connect to live stream
+  	client.connect("wss://socket.polygon.io/stocks").wait();
+
+	// Send authentication
+	out_msg.set_utf8_message("{\"action\":\"auth\",\"params\":\"" STRINGIZE_VAL(APIKEYID) "\"}");
+	client.send(out_msg).wait();
+
+	// Subscribe to stocks
+	out_msg.set_utf8_message("{\"action\":\"subscribe\",\"params\":\"" watchlist_tickers "\"}");
+	client.send(out_msg).wait();
+
+	// Read live stream updates
+	// while(true) {
+	// 	std::cout << market_data_json_real_time.dump() << std::endl;
+	// 	SLEEP(1000);
+	// }
+
+/* End of Subscribe */
 
 /* Initial Buy Orders */	
 
 
 	// Request data for all stocks in watchlist
-	request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
+	// request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
 
-	while((status_code = fulfill_get_request(request, response)) != 200) {
+	// while((status_code = fulfill_get_request(request, response)) != 200) {
 
-		std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
+	// 	std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
 
-		SLEEP(500);
-	}
+	// 	SLEEP(500);
+	// }
 
-	// Attempt to parse response into json
-	while(true) {
+	// // Attempt to parse response into json
+	// while(true) {
 
-		try {
+	// 	try {
 
-			market_data_json = json::parse(response);
+	// 		market_data_json = json::parse(response);
 
-			break;
-		}
-		catch(nlohmann::detail::parse_error err) {
+	// 		break;
+	// 	}
+	// 	catch(nlohmann::detail::parse_error err) {
 
-			std::cerr << "Parse error while parsing snap shot of all stocks" << std::endl;
+	// 		std::cerr << "Parse error while parsing snap shot of all stocks" << std::endl;
 
-		}
-		catch(nlohmann::detail::type_error err) {
+	// 	}
+	// 	catch(nlohmann::detail::type_error err) {
 
-			std::cerr << "Type error while parsing snap shot of all stocks" << std::endl;
+	// 		std::cerr << "Type error while parsing snap shot of all stocks" << std::endl;
 
-		}
-	}
+	// 	}
+	// }
 
 
 	// Submit limit order for each stock in watchlist
@@ -894,6 +917,11 @@ std::cout << "18" << std::endl;
 	} // While loop: Submit sell orders, submit buy orders on stocks that were sold
 
 /* End of Sell Orders/Reentry Orders/Cancel Sold Orders/Refresh Orders */
+
+
+	client.close().wait();
+
+	return 0;
 
 #else   
     std::cerr << "API-KEY-ID and/or API-SECRET-KEY are/is undefined."  << std::endl;
