@@ -20,22 +20,22 @@ using namespace web::websockets::client;
 #define STRINGIZE_VAL(X) STR(X)
 #define SLEEP(MS) std::this_thread::sleep_for(std::chrono::milliseconds(MS))
 #define PREV_MONTH_S "01"
-#define PREV_DAY_S 	"14"
+#define PREV_DAY_S 	"15"
 #define PREV_YEAR_S  "2021"
 #define MONTH_S "01"
-#define DAY_S 	"15"
+#define DAY_S 	"19"
 #define YEAR_S  "2021"
 #define NEXT_MONTH_S "01"
-#define NEXT_DAY_S 	"19"
+#define NEXT_DAY_S 	"20"
 #define NEXT_YEAR_S  "2021"
 #define PREV_MONTH_I 0
-#define PREV_DAY_I 	14
+#define PREV_DAY_I 	15
 #define PREV_YEAR_I  2021
 #define MONTH_I 0
-#define DAY_I 	15
+#define DAY_I 	19
 #define YEAR_I  2021
 #define NEXT_MONTH_I 0
-#define NEXT_DAY_I 	19
+#define NEXT_DAY_I 	20
 #define NEXT_YEAR_I  2021
 #define NOW (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
 #define HOUR 8
@@ -393,7 +393,7 @@ std::cout << "04" << std::endl;
 	std::string watchlist_tickers = "";
 	for(const auto& ticker_pair : watchlist) {
 
-		watchlist_tickers += (ticker_pair.first + ",");
+		watchlist_tickers += ("A." + ticker_pair.first + ",");
 
 		open_position_map[ticker_pair.first] = false, buy_order_map[ticker_pair.first] = false, sell_order_map[ticker_pair.first] = 0;
 	}
@@ -425,13 +425,14 @@ std::cout << "08" << std::endl;
 			try {
 				m1.lock();
 				market_data_json_real_time = json::parse(body);
-				std::cout << market_data_json_real_time.dump() << std::endl;
+				
 
 				uint64_t real_time_indx = 0;
 				// Update VWAP in map
 				while(market_data_json_real_time[real_time_indx] != nullptr) {
 					std::string event = market_data_json_real_time[real_time_indx]["ev"];
 					if(event == "A") {
+						std::cout << market_data_json_real_time[real_time_indx]["sym"] << std::endl;
 
 						std::string ticker = market_data_json_real_time[real_time_indx]["sym"];
 
@@ -482,8 +483,7 @@ std::cout << "08" << std::endl;
 	while(true) {
 
 		m1.lock();
-		
-		if((market_data_json_real_time != nullptr) && (static_cast<std::string>(market_data_json_real_time[0]["ev"]) == "status" )) {
+		if((market_data_json_real_time != nullptr) && (static_cast<std::string>(market_data_json_real_time[0]["ev"]) == "A" )) {
 			m1.unlock();
 			break;
 		}
@@ -890,7 +890,7 @@ std::cout << "18" << std::endl;
 			open_position_pair.second = false;
 		}
 
-		SLEEP(500);
+		SLEEP(300);
 
 	} // While loop: Submit sell orders, submit buy orders on stocks that were sold
 
