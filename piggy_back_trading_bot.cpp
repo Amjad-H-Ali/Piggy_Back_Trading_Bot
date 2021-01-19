@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <mutex>
 #include <cpprest/ws_client.h>
 
 
@@ -205,6 +206,7 @@ int main(void) {
 
 #if defined (APIKEYID) &&  defined (APISECRETKEY)
 
+	std::mutex m1;
 	std::string response;
 
 	// Request market data for previous open day
@@ -299,7 +301,8 @@ std::cout << "02" << std::endl;
 
 	std::cout << "03" << std::endl;
 
-	std::vector<std::string> watchlist;
+	// Ticker and VWAP
+	std::map<std::string, float> watchlist;
 
 	std::map<std::string, Prev_Market_Data_T>::iterator it_end = prev_market_data_map.end();
 	// Put all stocks in a watchlist that meet the requirement below:
@@ -320,7 +323,7 @@ std::cout << "02" << std::endl;
 		// Stock's price spiked 5% or more, volume spiked 500% or more, total day's volume of last trading day was 150k or more.
 		if((price_percent_change >= 0.05) && (volume_percent_change >= 5) && ((it_prev_market->second).volume >= 150000)) {
 
-			watchlist.emplace_back(static_cast<std::string>(market_data_json["results"][stock_indx]["T"]));
+			watchlist.emplace(static_cast<std::string>(market_data_json["results"][stock_indx]["T"]), -1);
 		}
 	} // For loop: creating watchlist
 
@@ -388,11 +391,11 @@ std::cout << "04" << std::endl;
 
 	// Prepare string of watchlist tickers for market data request
 	std::string watchlist_tickers = "";
-	for(const std::string& ticker : watchlist) {
+	for(const auto& ticker_pair : watchlist) {
 
-		watchlist_tickers += (ticker + ",");
+		watchlist_tickers += (ticker_pair.first + ",");
 
-		open_position_map[ticker] = false, buy_order_map[ticker] = false, sell_order_map[ticker] = 0;
+		open_position_map[ticker_pair.first] = false, buy_order_map[ticker_pair.first] = false, sell_order_map[ticker_pair.first] = 0;
 	}
 
 	// Delete last comma
@@ -401,13 +404,6 @@ std::cout << "04" << std::endl;
 	
 std::cout << "07" << std::endl;
 
-	// Put thread to sleep until next minute
-	// int64_t ms_till_start = get_time_in_ms(MONTH_I, DAY_I, YEAR_I, NEXT_HOUR, NEXT_MINUTE, NEXT_SEC) - NOW;
-
-	// if(ms_till_start > 0) {
-
-	// 	SLEEP(ms_till_start);
-	// }
 
 std::cout << "08" << std::endl;
 
@@ -415,23 +411,6 @@ std::cout << "08" << std::endl;
 
 
 /* Subscribe */
-
-// Stocks Aggregate:
-{
-    "ev": "AM",             // Event Type ( A = Second Agg, AM = Minute Agg )
-    "sym": "MSFT",          // Symbol Ticker
-    "v": 10204,             // Tick Volume
-    "av": 200304,           // Accumulated Volume ( Today )
-    "op": 114.04,           // Today's official opening price
-    "vw": 114.4040,         // VWAP (Volume Weighted Average Price)
-    "o": 114.11,            // Tick Open Price
-    "c": 114.14,            // Tick Close Price
-    "h": 114.19,            // Tick High Price
-    "l": 114.09,            // Tick Low Price
-    "a": 114.1314,          // Tick Average / VWAP Price
-    "s": 1536036818784,     // Tick Start Timestamp ( Unix MS )
-    "e": 1536036818784,     // Tick End Timestamp ( Unix MS )
-}
 
 	websocket_callback_client client;
 	websocket_outgoing_message out_msg;
@@ -443,18 +422,37 @@ std::cout << "08" << std::endl;
 	{
 		(in_msg.extract_string()).then([&](const std::string& body) {
 
-			while(true) {
+			try {
+				m1.lock();
+				market_data_json_real_time = json::parse(body);
+				std::cout << market_data_json_real_time.dump() << std::endl;
 
-				try {
-					market_data_json_real_time = json::parse(body);
-					break;
-				}
-				catch(const nlohmann::detail::parse_error &err) {
+				uint64_t real_time_indx = 0;
+				// Update VWAP in map
+				while(market_data_json_real_time[real_time_indx] != nullptr) {
+					std::string event = market_data_json_real_time[real_time_indx]["ev"];
+					if(event == "A") {
 
-					std::cerr << "No real-time data to Parse" << std::endl;
-					continue;
+						std::string ticker = market_data_json_real_time[real_time_indx]["sym"];
+
+						watchlist[ticker] = market_data_json_real_time[real_time_indx]["vw"];
+
+					}
+					++real_time_indx;
 				}
+				m1.unlock();
+
+				// if(market_data_json_real_time)
+				
 			}
+			catch(const nlohmann::detail::parse_error &err) {
+
+				m1.unlock();
+
+				std::cout << "No real-time data to Parse" << std::endl;
+				
+			}
+			
 			
 		}).wait();;
 	});
@@ -462,70 +460,61 @@ std::cout << "08" << std::endl;
 
 	// Connect to live stream
   	client.connect("wss://socket.polygon.io/stocks").wait();
+	
+		
 
 	// Send authentication
 	out_msg.set_utf8_message("{\"action\":\"auth\",\"params\":\"" STRINGIZE_VAL(APIKEYID) "\"}");
 	client.send(out_msg).wait();
 
+		
 	// Subscribe to stocks
-	out_msg.set_utf8_message("{\"action\":\"subscribe\",\"params\":\"" watchlist_tickers "\"}");
+	out_msg.set_utf8_message("{\"action\":\"subscribe\",\"params\":\"" + watchlist_tickers + "\"}");
+	std::cout << "{\"action\":\"subscribe\",\"params\":\"" + watchlist_tickers + "\"}" << std::endl;
 	client.send(out_msg).wait();
 
-	// Read live stream updates
-	// while(true) {
-	// 	std::cout << market_data_json_real_time.dump() << std::endl;
-	// 	SLEEP(1000);
-	// }
-
+	
 /* End of Subscribe */
 
 /* Initial Buy Orders */	
 
+	
+	while(true) {
 
-	// Request data for all stocks in watchlist
-	// request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
-
-	// while((status_code = fulfill_get_request(request, response)) != 200) {
-
-	// 	std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
-
-	// 	SLEEP(500);
-	// }
-
-	// // Attempt to parse response into json
-	// while(true) {
-
-	// 	try {
-
-	// 		market_data_json = json::parse(response);
-
-	// 		break;
-	// 	}
-	// 	catch(nlohmann::detail::parse_error err) {
-
-	// 		std::cerr << "Parse error while parsing snap shot of all stocks" << std::endl;
-
-	// 	}
-	// 	catch(nlohmann::detail::type_error err) {
-
-	// 		std::cerr << "Type error while parsing snap shot of all stocks" << std::endl;
-
-	// 	}
-	// }
+		m1.lock();
+		
+		if((market_data_json_real_time != nullptr) && (static_cast<std::string>(market_data_json_real_time[0]["ev"]) == "status" )) {
+			m1.unlock();
+			break;
+		}
+		m1.unlock();
+	}
 
 
+	
+	
 	// Submit limit order for each stock in watchlist
-	for(uint64_t stock_indx = 0, stock_count = market_data_json["count"]; stock_indx < stock_count; ++stock_indx) {
+	for(const auto& ticker_pair : buy_order_map) {
 
-		std::string ticker = market_data_json["tickers"][stock_indx]["ticker"];
+		std::cout << "09" << std::endl;
 
+		std::string ticker = ticker_pair.first;
+
+		m1.lock();
+		if(watchlist[ticker] == -1) {
+			m1.unlock();
+			continue;
+		}
+		m1.unlock();
+
+		m1.lock();
 		// Compute 2% below VWAP
-		float limit_price = static_cast<float>(market_data_json["tickers"][stock_indx]["min"]["vw"])*static_cast<float>(0.98);
+		float limit_price = watchlist[ticker]*static_cast<float>(0.98);
+		m1.unlock();
 		// Compute quantity to buy
 		uint64_t qty = capital_distribution/limit_price;
 
 		request = "https://" ACCOUNT ".alpaca.markets/v2/orders";
-
 
 		// Create order string
 		decltype(json::parse(response)) param_json;
@@ -550,6 +539,12 @@ std::cout << "08" << std::endl;
 			if(status_code == 403) {
 
 				std::cerr << "Insuffucient Buying Power. Decreasing qty" << std::endl;
+				m1.lock();
+				// Compute 2% below VWAP
+				limit_price = watchlist[ticker]*static_cast<float>(0.98);
+				m1.unlock();
+				// Compute quantity to buy
+				qty = capital_distribution/limit_price;
 				param_json["qty"] = (qty/=2);
 			}
 			else {
@@ -559,10 +554,9 @@ std::cout << "08" << std::endl;
 
 		buy_order_map[ticker]  = true;
 
-	} // For-loop: Initial limit buy orders of all stocks in watchlist
+	} // While-loop: Initial limit buy orders of all stocks in watchlist
 
 /* End of Initial Buy Orders */
-
 
 /* Sell Orders/Reentry Orders/Cancel Sold Orders/Refresh Orders */
 
@@ -669,23 +663,19 @@ std::cout << "16" << std::endl;
 
 		// If position was sold, submit new limit buy order.
 		// Prepare string with stocks to rebuy for market data request
-		std::string reentry_watchlist_tickers = "";
-		uint64_t reentry_count = 0;
+		std::vector<std::string> reentry_watchlist_tickers;
 		for(const auto& open_position_pair : open_position_map) {
 
 			if((buy_order_map[open_position_pair.first] == false) && (open_position_pair.second == false)) {
 
-				reentry_watchlist_tickers += (open_position_pair.first + ",");
-
-				++reentry_count;
-				
+				reentry_watchlist_tickers.emplace_back(open_position_pair.first);
 			}
 		} // For loop: Prepare string with stocks to rebuy 
 
+		uint64_t reentry_count = reentry_watchlist_tickers.size();
+
 		// If there are stocks to rebuy, submit limit order for each one
 		if(reentry_count > 0) {
-
-			reentry_watchlist_tickers.erase(reentry_watchlist_tickers.end()-1);
 
 /* Request Account Info */
 
@@ -730,51 +720,30 @@ std::cout << "16" << std::endl;
 
 
 /* End of Request for Account Info */
+			std::cout << "sz: " << reentry_watchlist_tickers.size() << std::endl;
+			for(const std::string& ticker : reentry_watchlist_tickers) {
 
+				
 
-			// Request market data for stocks to rebuy 
-			request = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=" + reentry_watchlist_tickers + "&apiKey=" STRINGIZE_VAL(APIKEYID);
-	
-			while((status_code = fulfill_get_request(request, response)) != 200) {
-
-				std::cerr << "Error while requesting snap shot for reentry stocks. Status code: " << status_code << " . Retrying ..." << std::endl;
-
-				SLEEP(500);
-			}
-
-			// Attempt to parse response into json
-			while(true) {
-
-				try {
-
-					market_data_json = json::parse(response);
-
-					break;
+				m1.lock();
+				if(watchlist[ticker] == -1) {
+					m1.unlock();
+					continue;
 				}
-				catch(nlohmann::detail::parse_error err) {
+				m1.unlock();
 
-					std::cerr << "Parse error while parsing snap shot of second+ entry stocks" << std::endl;
+				
 
-				}
-				catch(nlohmann::detail::type_error err) {
+				
 
-					std::cerr << "Type error while parsing snap shot of second+ entry stocks" << std::endl;
-
-				}
-			}
-
-			// Calculate limit price and submit order for each stock to rebuy
-			for(uint64_t stock_indx = 0, stock_count = market_data_json["count"]; stock_indx < stock_count; ++stock_indx) {
-
-				std::string ticker = market_data_json["tickers"][stock_indx]["ticker"];
-
-
-std::cout << "11" << std::endl;
-
+				m1.lock();
 				// Calculate the limit price, 2% below the VWAP, to buy this stock
-				float limit_price = static_cast<float>(market_data_json["tickers"][stock_indx]["min"]["vw"])*static_cast<float>(0.98);
+				float limit_price = static_cast<float>(watchlist[ticker])*static_cast<float>(0.98);
+				m1.unlock();
+
 				// Calculate the amount to buy
 				uint64_t qty = capital_redistribution/limit_price;
+
 
 				// Create order string and submit request
 				request = "https://" ACCOUNT ".alpaca.markets/v2/orders";
@@ -802,6 +771,15 @@ std::cout << "13" << std::endl;
 					if(status_code == 403) {
 
 						std::cerr << "Insuffucient Buying Power. Decreasing qty" << std::endl;
+
+						m1.lock();
+						// Calculate the limit price, 2% below the VWAP, to buy this stock
+						limit_price = static_cast<float>(watchlist[ticker])*static_cast<float>(0.98);
+						m1.unlock();
+
+						// Calculate the amount to buy
+						qty = capital_redistribution/limit_price;
+
 						param_json["qty"] = (qty/=2);
 					}
 					else {
@@ -814,8 +792,8 @@ std::cout << "13" << std::endl;
 				buy_order_map[ticker]     = true;
 				open_position_map[ticker] = false;
 
-				
 			} // For loop: Calculate limit price and submit order for each stock to rebuy
+
 
 		} // If statement: If there are stocks to rebuy, submit limit order for each one
 
@@ -838,7 +816,7 @@ std::cout << "13" << std::endl;
 
 				SLEEP(500);
 			}
-			while(1) {
+			while(true) {
 
 				try {
 
