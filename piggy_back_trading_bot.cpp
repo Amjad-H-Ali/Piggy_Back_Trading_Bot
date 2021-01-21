@@ -20,22 +20,22 @@ using namespace web::websockets::client;
 #define STRINGIZE_VAL(X) STR(X)
 #define SLEEP(MS) std::this_thread::sleep_for(std::chrono::milliseconds(MS))
 #define PREV_MONTH_S "01"
-#define PREV_DAY_S 	"15"
+#define PREV_DAY_S 	"19"
 #define PREV_YEAR_S  "2021"
 #define MONTH_S "01"
-#define DAY_S 	"19"
+#define DAY_S 	"20"
 #define YEAR_S  "2021"
 #define NEXT_MONTH_S "01"
-#define NEXT_DAY_S 	"20"
+#define NEXT_DAY_S 	"21"
 #define NEXT_YEAR_S  "2021"
 #define PREV_MONTH_I 0
-#define PREV_DAY_I 	15
+#define PREV_DAY_I 	19
 #define PREV_YEAR_I  2021
 #define MONTH_I 0
-#define DAY_I 	19
+#define DAY_I 	20
 #define YEAR_I  2021
 #define NEXT_MONTH_I 0
-#define NEXT_DAY_I 	20
+#define NEXT_DAY_I 	21
 #define NEXT_YEAR_I  2021
 #define NOW (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
 #define HOUR 8
@@ -45,6 +45,22 @@ using namespace web::websockets::client;
 #define NEXT_MINUTE 31
 #define NEXT_SEC 5
 #define ACCOUNT "paper-api"
+
+
+
+
+
+
+// Readable time, used for debugging
+void current_human_time() {
+
+   time_t t; // t passed as argument in function time()
+   struct tm * tt; // decalring variable for localtime()
+   time (&t); //passing argument to time()
+   tt = localtime(&t);
+   std::cout << "Current Day, Date and Time is = "<< asctime(tt) << std::endl;
+
+}
 
 // Appends response to given output string
 static size_t write_data(const char* in, std::size_t size, std::size_t num, char* out) {
@@ -199,6 +215,56 @@ struct Prev_Market_Data_T{
 	Prev_Market_Data_T(float Price, float Volume) 
 		:price(Price), volume(Volume) {}
 };
+
+
+
+
+
+void print_account() {
+
+	uint64_t status_code;
+
+	std::string response;
+
+	decltype(json::parse(response)) market_data_json;
+
+	// Request account information
+	std::string request = "https://" ACCOUNT ".alpaca.markets/v2/account";
+	
+	while( (status_code = fulfill_get_request(request, response)) != 200 ) {
+
+		std::cerr << "Error while requesting account. Status Code: " << status_code << " . Retrying ..." << std::endl;
+
+		SLEEP(500);
+	}
+
+
+	// Attempt to parse response into json
+	while(true) {
+
+		try {
+
+			market_data_json = json::parse(response);
+
+			break;
+		}
+		catch(nlohmann::detail::parse_error err) {
+
+			std::cerr << "Error while parsing account" << std::endl;
+
+		}
+		catch(nlohmann::detail::type_error err) {
+
+			std::cerr << "Type error while parsing account" << std::endl;
+
+		}
+	}
+
+	std::cout << "ACCOUNT: " << market_data_json.dump() << std::endl;
+
+}
+
+
 
 int main(void) {
 
@@ -378,6 +444,7 @@ std::cout << "04" << std::endl;
 	std::cout << "06" << std::endl;
 
 	std::cout << "I CASH: " << std::stof(static_cast<std::string>(market_data_json["cash"])) << std::endl;
+	std::cout << "I ACCOUNT: " << market_data_json.dump(4) << std::endl;
 
 	// Evenly allocate cash to all stocks in watchlist. Cash distribution should be no greater than 5% of the total cash
 	float capital_distribution = std::min(std::stof(static_cast<std::string>(market_data_json["cash"]))/watchlist.size(), std::stof(static_cast<std::string>(market_data_json["cash"]))*static_cast<float>(0.05));
@@ -432,7 +499,13 @@ std::cout << "08" << std::endl;
 				while(market_data_json_real_time[real_time_indx] != nullptr) {
 					std::string event = market_data_json_real_time[real_time_indx]["ev"];
 					if(event == "A") {
-						std::cout << market_data_json_real_time[real_time_indx]["sym"] << std::endl;
+						std::cout << "Ticker: " << market_data_json_real_time[real_time_indx]["sym"] << std::endl;
+						std::cout << "VWAP: " << market_data_json_real_time[real_time_indx]["vw"] << std::endl;
+						std::cout << "Start Time-Stamp: " << market_data_json_real_time[real_time_indx]["s"] << std::endl;
+						std::cout << "End Time-Stamp: " << market_data_json_real_time[real_time_indx]["e"] << std::endl;
+
+
+						current_human_time();
 
 						std::string ticker = market_data_json_real_time[real_time_indx]["sym"];
 
@@ -527,7 +600,7 @@ std::cout << "08" << std::endl;
 		param_json["qty"]         		= qty;
 		param_json["time_in_force"]     = "gtc";
 
-		std::cout << "Init buy order: " << param_json.dump() << std::endl;
+
 
 	std::cout << "13" << std::endl;
 
@@ -551,6 +624,10 @@ std::cout << "08" << std::endl;
 				SLEEP(500);
 			}
 		}
+
+		std::cout << "Init buy order: " << param_json["symbol"] << "  " << param_json["limit_price"] << "  " << param_json["qty"] << std::endl;
+		current_human_time();
+		print_account();
 
 		buy_order_map[ticker]  = true;
 
@@ -633,7 +710,6 @@ std::cout << "15" << std::endl;
 				param_json["qty"]         		= (qty_of_position - qty_sold);
 				param_json["time_in_force"]     = "gtc";
 
-				std::cout << "Sell order: " << param_json.dump() << std::endl;
 			
 				uint64_t status_code; 
 		
@@ -643,6 +719,10 @@ std::cout << "15" << std::endl;
 
 					SLEEP(500);
 				}
+
+				std::cout << "Sell order: "  << param_json["symbol"] << "  " << param_json["qty"]  << std::endl;
+				current_human_time();
+				print_account();
 
 std::cout << "16" << std::endl;
 
@@ -759,8 +839,6 @@ std::cout << "12" << std::endl;
 				param_json["qty"]         		= qty;
 				param_json["time_in_force"]     = "gtc";
 
-				std::cout << "Rebuy order: " << param_json.dump() << std::endl;
-
 std::cout << "13" << std::endl;
 				// If buy order failed, resubmit order with less quantity
 				uint64_t status_code; 
@@ -786,7 +864,10 @@ std::cout << "13" << std::endl;
 						SLEEP(500);
 					}
 				}
-				
+
+				std::cout << "Rebuy order: : " << param_json["symbol"] << "  " << param_json["limit_price"] << "  " << param_json["qty"] << std::endl;
+				current_human_time();
+				print_account();
 
 				sell_order_map[ticker]    = 0;
 				buy_order_map[ticker]     = true;
@@ -877,10 +958,12 @@ std::cout << "18" << std::endl;
 				buy_order_pair.second = false;
 			}
 
+			print_account();
+
 			// Update minute
 			last_minute = NOW;
 
-		} // If: New minute, cancel all unfulfilled buy orders
+		} // If Statement: New minute, cancel all unfulfilled buy orders
 
 /* End of Refresh Orders */
 
@@ -908,3 +991,8 @@ std::cout << "18" << std::endl;
 #endif
 
 } // main
+
+
+
+
+
