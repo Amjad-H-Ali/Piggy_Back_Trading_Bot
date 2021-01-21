@@ -795,7 +795,7 @@ std::cout << "16" << std::endl;
 
 			std::cout << "R CASH: " << std::stof(static_cast<std::string>(market_data_json["cash"])) << std::endl;
 			float capital_redistribution = (std::stof(static_cast<std::string>(market_data_json["cash"])) - init_non_trading_cash)/reentry_count;
-
+			print_account();
 			std::cout << "R CASH D: " << capital_redistribution << std::endl;
 
 
