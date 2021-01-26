@@ -21,22 +21,22 @@ using namespace web::websockets::client;
 #define STRINGIZE_VAL(X) STR(X)
 #define SLEEP(MS) std::this_thread::sleep_for(std::chrono::milliseconds(MS))
 #define PREV_MONTH_S "01"
-#define PREV_DAY_S 	"20"
+#define PREV_DAY_S 	"24"
 #define PREV_YEAR_S  "2021"
 #define MONTH_S "01"
-#define DAY_S 	"21"
+#define DAY_S 	"25"
 #define YEAR_S  "2021"
 #define NEXT_MONTH_S "01"
-#define NEXT_DAY_S 	"22"
+#define NEXT_DAY_S 	"26"
 #define NEXT_YEAR_S  "2021"
 #define PREV_MONTH_I 0
-#define PREV_DAY_I 	20
+#define PREV_DAY_I 	24
 #define PREV_YEAR_I  2021
 #define MONTH_I 0
-#define DAY_I 	21
+#define DAY_I 	25
 #define YEAR_I  2021
 #define NEXT_MONTH_I 0
-#define NEXT_DAY_I 	22
+#define NEXT_DAY_I 	26
 #define NEXT_YEAR_I  2021
 #define NOW (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
 #define HOUR 8
@@ -46,8 +46,6 @@ using namespace web::websockets::client;
 #define NEXT_MINUTE 31
 #define NEXT_SEC 5
 #define ACCOUNT "paper-api"
-
-
 
 
 
